@@ -7,6 +7,14 @@ source "${SCRIPT_DIR}/common.sh"
 
 missing=0
 for tool in git python3 xrun; do
+  if [[ "${tool}" == "xrun" ]] && is_truthy "${DVSIM_DRY_RUN:-0}"; then
+    if command -v "${tool}" >/dev/null 2>&1; then
+      printf '[ok] %s: %s\n' "${tool}" "$(command -v "${tool}")"
+    else
+      printf '[dry-run] xrun not found; continuing because DVSIM_DRY_RUN=1\n'
+    fi
+    continue
+  fi
   if command -v "${tool}" >/dev/null 2>&1; then
     printf '[ok] %s: %s\n' "${tool}" "$(command -v "${tool}")"
   else

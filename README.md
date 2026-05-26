@@ -19,6 +19,33 @@ cp config.env.example config.env
 ./03_pack_usable_emissions.sh
 ```
 
+Flaky SSH / fire-and-forget path:
+
+```bash
+git clone https://github.com/AmurG/opentitan-harness.git
+cd opentitan-harness
+cp config.env.example config.env
+./run_detached_overnight_all.sh
+```
+
+That starts prerequisite checking, OpenTitan setup, the full overnight Xcelium
+run, and packing under `nohup`/`setsid`, then returns immediately with the PID
+and log path. You can close the connection after it prints those paths.
+
+If you already ran setup and only want to launch the long job:
+
+```bash
+RUN_SETUP=0 ./run_detached_overnight_all.sh
+```
+
+Status after reconnect:
+
+```bash
+tail -n 80 detached-runs/latest/overnight.log
+cat detached-runs/latest/status
+cat detached-runs/latest/archive_path
+```
+
 For the full overnight dashboard collection, run this instead of the default
 smoke eval:
 

@@ -2,6 +2,7 @@ config.env
 work/
 private-xrun/
 usable-emissions/
+detached-runs/
 opentitan-usable-emissions-*.tar.gz
 __pycache__/
 *.pyc
