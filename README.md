@@ -90,7 +90,9 @@ If your license permits moving raw waveforms, set `EXPORT_RAW_WAVES=1` in
 The default `targets/xrun-smoke.tsv` is five cases. The full overnight file
 `targets/xrun-overnight-all-dashboard.tsv` is all `2956` concrete
 dashboard-selected full-harness wrappers, with exact seeds copied from the
-local generated manifest.
+local generated manifest. The overnight launcher groups those rows by test
+name and passes each group to DVSim with that test's exact seed list, avoiding
+DVSim's duplicate `-i` item collapse while still sharing one scratch tree.
 
 `targets/xrun-frontier-missing57.tsv` is only the `57` concrete full-harness
 wrappers still missing from the local Arcilator retained-VCD coverage snapshot
