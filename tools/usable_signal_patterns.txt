@@ -1,0 +1,11 @@
+# Python regular expressions matched against full VCD signal paths.
+(^|\.)clk[^.]*$
+(^|\.)rst[^.]*$
+(^|\.)reset[^.]*$
+(^|\.)sw_test_status.*$
+(^|\.)fatal.*$
+(^|\.)error.*$
+(^|\.)mio_.*$
+(^|\.)dio_.*$
+(^|\.)uart.*$
+(^|\.)alert.*$

@@ -1,0 +1,9 @@
+config.env
+work/
+private-xrun/
+usable-emissions/
+opentitan-usable-emissions-*.tar.gz
+__pycache__/
+*.pyc
+*.log
+*.err

@@ -1,0 +1,6 @@
+# test	iteration	seed	build_mode	reason
+chip_csr_bit_bash	0	4104540892	cover_reg_top	baseline-dashboard-smoke
+chip_sw_uart_tx_rx_bootstrap	0	1870864236	default	current-arcilator-fileio-frontier
+chip_sw_sleep_pin_mio_dio_val	2	2863095203	default	current-arcilator-wait-modified-probe
+rom_e2e_self_hash	0	4097102489	default	next-open-gap
+chip_sw_aes_enc_jitter_en	0	3548151917	default	next-open-gap
