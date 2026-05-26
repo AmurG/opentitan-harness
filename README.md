@@ -10,6 +10,8 @@ DVSim subset, and export derived evidence under `usable-emissions/`.
 Run order:
 
 ```bash
+git clone https://github.com/AmurG/opentitan-harness.git
+cd opentitan-harness
 cp config.env.example config.env
 ./00_check_prereqs.sh
 ./01_setup_opentitan.sh
