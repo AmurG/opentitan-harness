@@ -2,6 +2,8 @@
 (^|\.)clk[^.]*$
 (^|\.)rst[^.]*$
 (^|\.)reset[^.]*$
+(^|\.)tb\.dut\.top_earlgrey\.
+(^|\.)dut\.top_earlgrey\.
 (^|\.)sw_test_status.*$
 (^|\.)fatal.*$
 (^|\.)error.*$
@@ -9,3 +11,14 @@
 (^|\.)dio_.*$
 (^|\.)uart.*$
 (^|\.)alert.*$
+(^|\.)usb.*$
+(^|\.)pwr.*$
+(^|\.)sleep.*$
+(^|\.)wake.*$
+(^|\.)lc_.*$
+(^|\.)flash.*$
+(^|\.)aes.*$
+(^|\.)hmac.*$
+(^|\.)kmac.*$
+(^|\.)rom.*$
+(^|\.)jtag.*$

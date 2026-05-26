@@ -14,12 +14,12 @@ from pathlib import Path
 
 IMPORTANT_LOG_RE = re.compile(
     r"(UVM_(?:ERROR|FATAL)|\*E,|\*F,|TEST (?:PASSED|FAILED)|"
-    r"PASSED|FAILED|Errors?:|Fatals?:|SVSEED|ntb_random_seed|waves?\\.)",
+    r"PASSED|FAILED|Errors?:|Fatals?:|SVSEED|ntb_random_seed|waves?\.)",
     re.IGNORECASE,
 )
-TIME_RE = re.compile(r"^#([0-9]+)\\s*$")
-VAR_RE = re.compile(r"^\\$var\\s+\\S+\\s+(\\d+)\\s+(\\S+)\\s+(.+?)\\s+\\$end\\s*$")
-SCOPE_RE = re.compile(r"^\\$scope\\s+\\S+\\s+(.+?)\\s+\\$end\\s*$")
+TIME_RE = re.compile(r"^#([0-9]+)\s*$")
+VAR_RE = re.compile(r"^\$var\s+\S+\s+(\d+)\s+(\S+)\s+(.+?)\s+\$end\s*$")
+SCOPE_RE = re.compile(r"^\$scope\s+\S+\s+(.+?)\s+\$end\s*$")
 
 
 def utc_now() -> str:
@@ -51,6 +51,36 @@ def sha256_file(path: Path, limit: int | None = None) -> str | None:
 def write_json(path: Path, data: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def copy_text_if_present(src: Path, dst: Path) -> str | None:
+    if not src.is_file():
+        return None
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_text(src.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+    return str(dst)
+
+
+def parse_target_file(path: Path) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    if not path.is_file():
+        return rows
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not raw.strip() or raw.startswith("#"):
+            continue
+        parts = raw.split("\t")
+        while len(parts) < 5:
+            parts.append("")
+        rows.append(
+            {
+                "test": parts[0],
+                "iteration": parts[1],
+                "seed": parts[2],
+                "build_mode": parts[3],
+                "reason": parts[4],
+            }
+        )
+    return rows
 
 
 def log_counts(paths: list[Path]) -> dict[str, int]:
@@ -123,6 +153,8 @@ def summarize_vcd(
 ) -> dict[str, object]:
     scopes: list[str] = []
     id_to_path: dict[str, str] = {}
+    all_signal_hash = hashlib.sha256()
+    prefix_counts: dict[str, int] = {}
     selected_ids: set[str] = set()
     selected: dict[str, dict[str, object]] = {}
     stats = {
@@ -162,6 +194,10 @@ def summarize_vcd(
                     _size, ident, ref = m_var.groups()
                     full_path = ".".join([*scopes, ref.strip()])
                     id_to_path[ident] = full_path
+                    all_signal_hash.update(f"{full_path}\n".encode("utf-8"))
+                    parts = [piece for piece in full_path.split(".") if piece]
+                    prefix = ".".join(parts[:4]) if parts else "<root>"
+                    prefix_counts[prefix] = prefix_counts.get(prefix, 0) + 1
                     stats["var_count"] += 1
                     if len(selected_ids) < max_signals and signal_wanted(full_path, patterns):
                         selected_ids.add(ident)
@@ -203,6 +239,13 @@ def summarize_vcd(
                 sample.append([current_time, value])
 
     stats["selected_signal_count"] = len(selected)
+    stats["all_signal_name_sha256"] = all_signal_hash.hexdigest()
+    stats["top_prefixes"] = [
+        {"prefix": prefix, "count": count}
+        for prefix, count in sorted(prefix_counts.items(), key=lambda item: (-item[1], item[0]))[
+            :40
+        ]
+    ]
     signals = []
     for item in selected.values():
         digest = item.pop("event_hash")
@@ -259,8 +302,10 @@ def main() -> int:
             "note": "Default output is derived summaries, filtered log excerpts, and VCD signatures.",
         },
         "target_file": str(args.target_file),
+        "targets": parse_target_file(args.target_file),
         "runs": [],
     }
+    copy_text_if_present(args.target_file, args.usable_out / "selected_targets.tsv")
 
     run_dirs = sorted(p for p in (args.private_root / "runs").glob("*") if p.is_dir())
     for run_dir in run_dirs:
@@ -285,6 +330,17 @@ def main() -> int:
             "log_counts": log_counts(logs),
             "waves": [],
         }
+        copied_command = copy_text_if_present(run_dir / "command.sh", out_dir / "command.sh")
+        copied_env = copy_text_if_present(run_dir / "run.env", out_dir / "run.env")
+        copied_targets = copy_text_if_present(
+            run_dir / "selected_targets.tsv", out_dir / "selected_targets.tsv"
+        )
+        if copied_command:
+            summary["command_sh"] = str(Path(copied_command).relative_to(args.usable_out))
+        if copied_env:
+            summary["run_env"] = str(Path(copied_env).relative_to(args.usable_out))
+        if copied_targets:
+            summary["selected_targets_tsv"] = str(Path(copied_targets).relative_to(args.usable_out))
         write_log_excerpt(logs, out_dir / "log_excerpt.txt", args.log_excerpt_lines)
 
         for wave in waves:
