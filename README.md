@@ -19,10 +19,25 @@ cp config.env.example config.env
 ./03_pack_usable_emissions.sh
 ```
 
-For the overnight collection set, run this instead of the default smoke eval:
+For the full overnight dashboard collection, run this instead of the default
+smoke eval:
 
 ```bash
-./04_run_overnight_missing57.sh
+./04_run_overnight_all.sh
+./03_pack_usable_emissions.sh
+```
+
+To inspect the generated full-dashboard DVSim command without launching Xcelium:
+
+```bash
+DVSIM_DRY_RUN=1 ./04_run_overnight_all.sh
+sed -n '1p' private-xrun/runs/all-dashboard/command.sh
+```
+
+For only the unresolved Arcilator frontier subset, run:
+
+```bash
+./05_run_frontier_missing57.sh
 ./03_pack_usable_emissions.sh
 ```
 
@@ -45,7 +60,12 @@ Do not tar `work/` or `private-xrun/` for transfer. Tar only
 If your license permits moving raw waveforms, set `EXPORT_RAW_WAVES=1` in
 `config.env`; the default is intentionally derived-only.
 
-The default `targets/xrun-smoke.tsv` is five cases. The overnight file
-`targets/xrun-overnight-missing57.tsv` is the `57` concrete full-harness
-wrappers still missing from the local Arcilator OpenTitan coverage snapshot as
-of 2026-05-24, with exact seeds copied from the local generated manifest.
+The default `targets/xrun-smoke.tsv` is five cases. The full overnight file
+`targets/xrun-overnight-all-dashboard.tsv` is all `2956` concrete
+dashboard-selected full-harness wrappers, with exact seeds copied from the
+local generated manifest.
+
+`targets/xrun-frontier-missing57.tsv` is only the `57` concrete full-harness
+wrappers still missing from the local Arcilator retained-VCD coverage snapshot
+as of 2026-05-24. It is not a parity-comparison substitute for the full
+dashboard list.
