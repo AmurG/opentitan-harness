@@ -114,9 +114,10 @@ small exportable bundle:
 RUN_SETUP=0 ./run_detached_10h_signal.sh
 ```
 
-This uses `targets/xrun-10h-signal.tsv`, a 57-row exact-seed subset ordered as
-calibration, current Arcilator frontier probes, subsystem smoke breadth, ROM /
-lifecycle coverage, and heavyweight one-seed sentinels. It uses
+This uses `targets/xrun-10h-signal.tsv`, a 57-row exact-seed subset with
+`BATCH_PRESERVE_TARGET_ORDER=1`, ordered breadth-first: known-good Xcelium/CSR
+sanity first, then one representative seed from each current Arcilator frontier
+and subsystem smoke family, then repeat seeds and heavyweight sentinels. It uses
 `DVSIM_MAX_WAVES=1`, one seed per DVSim invocation, a `35m` per-group timeout,
 a `10h` outer timeout, no raw-wave export, and a separate
 `usable-emissions-signal-10h/` output directory. Large VCDs are summarized

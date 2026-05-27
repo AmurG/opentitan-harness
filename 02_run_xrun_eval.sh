@@ -104,6 +104,7 @@ if is_truthy "${BATCH_TARGETS:-0}"; then
     printf 'RUN_ROOT=%s\n' "${run_root}"
     printf 'TARGET_FILE=%s\n' "${TARGET_FILE}"
     printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
+    printf 'BATCH_PRESERVE_TARGET_ORDER=%s\n' "${BATCH_PRESERVE_TARGET_ORDER:-}"
     printf 'DVSIM_GROUP_TIMEOUT=%s\n' "${DVSIM_GROUP_TIMEOUT:-}"
     printf 'DVSIM_GROUP_TIMEOUT_KILL_AFTER=%s\n' "${DVSIM_GROUP_TIMEOUT_KILL_AFTER:-}"
   } > "${run_root}/run.env"
@@ -123,6 +124,12 @@ run_root = Path(sys.argv[2])
 groups_dir = run_root / "groups"
 groups_dir.mkdir(parents=True, exist_ok=True)
 max_chunk_text = os.environ.get("BATCH_GROUP_MAX_SEEDS", "").strip()
+preserve_order = os.environ.get("BATCH_PRESERVE_TARGET_ORDER", "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 max_chunk = 0
 if max_chunk_text:
     try:
@@ -136,38 +143,58 @@ def safe_slug(text: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
     return text or "unnamed"
 
-groups: OrderedDict[str, list[list[str]]] = OrderedDict()
+rows: list[list[str]] = []
 for raw in target_file.read_text(encoding="utf-8", errors="replace").splitlines():
     if not raw.strip() or raw.startswith("#"):
         continue
     parts = raw.split("\t")
     while len(parts) < 5:
         parts.append("")
-    groups.setdefault(parts[0], []).append(parts[:5])
+    rows.append(parts[:5])
 
 with (run_root / "groups.tsv").open("w", encoding="utf-8") as manifest:
     manifest.write("group_idx\ttest\tseed_count\tseeds\tgroup_dir\n")
     group_idx = 0
-    for test, rows in groups.items():
-        if max_chunk:
-            chunks = [rows[i : i + max_chunk] for i in range(0, len(rows), max_chunk)]
-        else:
-            chunks = [rows]
-        for chunk_idx, chunk in enumerate(chunks):
-            suffix = ""
-            if len(chunks) > 1:
-                suffix = f"__part{chunk_idx + 1:03d}of{len(chunks):03d}"
-            group_dir = groups_dir / f"{group_idx:04d}_{safe_slug(test)}{suffix}"
+    if preserve_order:
+        for row in rows:
+            test = row[0]
+            group_dir = groups_dir / f"{group_idx:04d}_{safe_slug(test)}"
             group_dir.mkdir(parents=True, exist_ok=True)
             (group_dir / "selected_targets.tsv").write_text(
                 "# test\titeration\tseed\tbuild_mode\treason\n"
-                + "\n".join("\t".join(row) for row in chunk)
+                + "\t".join(row)
                 + "\n",
                 encoding="utf-8",
             )
-            seeds = ",".join(row[2] for row in chunk)
-            manifest.write(f"{group_idx}\t{test}\t{len(chunk)}\t{seeds}\t{group_dir}\n")
+            manifest.write(f"{group_idx}\t{test}\t1\t{row[2]}\t{group_dir}\n")
             group_idx += 1
+    else:
+        groups: OrderedDict[str, list[list[str]]] = OrderedDict()
+        for row in rows:
+            groups.setdefault(row[0], []).append(row)
+        for test, grouped_rows in groups.items():
+            if max_chunk:
+                chunks = [
+                    grouped_rows[i : i + max_chunk]
+                    for i in range(0, len(grouped_rows), max_chunk)
+                ]
+            else:
+                chunks = [grouped_rows]
+            for chunk_idx, chunk in enumerate(chunks):
+                suffix = ""
+                if len(chunks) > 1:
+                    suffix = f"__part{chunk_idx + 1:03d}of{len(chunks):03d}"
+                group_dir = groups_dir / f"{group_idx:04d}_{safe_slug(test)}{suffix}"
+                group_dir.mkdir(parents=True, exist_ok=True)
+                (group_dir / "selected_targets.tsv").write_text(
+                    "# test\titeration\tseed\tbuild_mode\treason\n"
+                    + "\n".join("\t".join(row) for row in chunk)
+                    + "\n",
+                    encoding="utf-8",
+                )
+                seeds = ",".join(row[2] for row in chunk)
+                manifest.write(f"{group_idx}\t{test}\t{len(chunk)}\t{seeds}\t{group_dir}\n")
+                group_idx += 1
 PY
 
   group_count="$(($(wc -l < "${run_root}/groups.tsv") - 1))"
