@@ -12,7 +12,14 @@ if [[ ! -d "${USABLE_OUT}" ]]; then
 fi
 
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-archive="${HARNESS_ROOT}/opentitan-usable-emissions-${stamp}.tar.gz"
+usable_base="$(basename "${USABLE_OUT}")"
+if [[ "${usable_base}" == "usable-emissions" ]]; then
+  archive_stem="opentitan-usable-emissions"
+else
+  archive_stem="opentitan-${usable_base}"
+fi
+archive_name="${ARCHIVE_NAME:-${archive_stem}-${stamp}.tar.gz}"
+archive="${HARNESS_ROOT}/${archive_name}"
 tar -czf "${archive}" -C "$(dirname "${USABLE_OUT}")" "$(basename "${USABLE_OUT}")"
 
 printf '[ok] archive: %s\n' "${archive}"

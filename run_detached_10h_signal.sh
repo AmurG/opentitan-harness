@@ -50,6 +50,7 @@ export VCD_SIGNATURE_MAX_BYTES="${VCD_SIGNATURE_MAX_BYTES:-100000000}"
 export SIGNAL_RUN_TIMEOUT="${SIGNAL_RUN_TIMEOUT:-10h}"
 export SIGNAL_RUN_KILL_AFTER="${SIGNAL_RUN_KILL_AFTER:-10m}"
 export MAX_SIGNAL_ARCHIVE_BYTES="${MAX_SIGNAL_ARCHIVE_BYTES:-1000000000}"
+export ARCHIVE_NAME="${ARCHIVE_NAME:-opentitan-usable-emissions-signal-10h-$(basename "__RUN_DIR__").tar.gz}"
 
 printf '[detached-signal] started %s\n' "${RUN_STARTED_UTC}"
 printf '[detached-signal] host=%s cwd=%s\n' "$(hostname 2>/dev/null || printf unknown)" "$(pwd)"
@@ -96,9 +97,8 @@ if [[ "${collect_rc}" == "0" ]]; then
   ./03_pack_usable_emissions.sh
   archive_rc=$?
   set -e
-  archive="$(ls -1t opentitan-usable-emissions-*.tar.gz 2>/dev/null | head -n 1 || true)"
-  if [[ -n "${archive}" ]]; then
-    archive_full="$(pwd)/${archive}"
+  archive_full="$(pwd)/${ARCHIVE_NAME}"
+  if [[ "${archive_rc}" == "0" && -f "${archive_full}" ]]; then
     printf '%s\n' "${archive_full}" > "__RUN_DIR__/archive_path"
     printf '[detached-signal] archive=%s\n' "${archive_full}"
     archive_bytes="$(wc -c < "${archive_full}" | tr -d ' ')"
