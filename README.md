@@ -92,7 +92,8 @@ The default `targets/xrun-smoke.tsv` is five cases. The full overnight file
 dashboard-selected full-harness wrappers, with exact seeds copied from the
 local generated manifest. The overnight launcher groups those rows by test
 name and passes each group to DVSim with that test's exact seed list, avoiding
-DVSim's duplicate `-i` item collapse while still sharing one scratch tree.
+DVSim's duplicate `-i` item collapse while keeping each group's raw logs and
+waves in a separate scratch tree.
 
 `targets/xrun-frontier-missing57.tsv` is only the `57` concrete full-harness
 wrappers still missing from the local Arcilator retained-VCD coverage snapshot

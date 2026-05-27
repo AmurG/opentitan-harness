@@ -152,7 +152,7 @@ PY
       --max-waves "${group_max_waves}"
       --reseed "${seed_count}"
       --seeds "${group_seeds[@]}"
-      --scratch-root "${run_root}/scratch"
+      --scratch-root "${group_dir}/scratch"
       --max-parallel "${DVSIM_MAX_PARALLEL}"
     )
     if [[ -n "${DVSIM_EXTRA_ARGS:-}" ]]; then

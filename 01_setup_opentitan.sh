@@ -46,7 +46,9 @@ fi
 if ! command -v fusesoc >/dev/null 2>&1; then
   python -m pip install fusesoc
 fi
-if ! command -v dvsim >/dev/null 2>&1 && ! command -v dvsim.py >/dev/null 2>&1; then
+if [[ ! -x "${OPENTITAN_ROOT}/util/dvsim/dvsim.py" ]] \
+  && ! command -v dvsim >/dev/null 2>&1 \
+  && ! command -v dvsim.py >/dev/null 2>&1; then
   python -m pip install dvsim
 fi
 
