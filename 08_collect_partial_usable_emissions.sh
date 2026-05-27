@@ -6,6 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 target_for_manifest="${PARTIAL_TARGET_FILE:-}"
+generated_target_file=""
+generated_target_sources=()
+
 if [[ -z "${target_for_manifest}" && -n "${BATCH_NAME:-}" ]]; then
   batch_slug="$(safe_slug "${BATCH_NAME}")"
   if [[ -f "${PRIVATE_OUT}/runs/${batch_slug}/selected_targets.tsv" ]]; then
@@ -15,15 +18,20 @@ fi
 if [[ -z "${target_for_manifest}" && -n "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" ]]; then
   matching_targets=()
   while IFS= read -r candidate; do
-    if [[ "${candidate}" =~ ${COLLECT_INCLUDE_PRIVATE_PATH_REGEX} ]]; then
+    relative_candidate="${candidate#${PRIVATE_OUT}/}"
+    if [[ "${relative_candidate}" =~ ${COLLECT_INCLUDE_PRIVATE_PATH_REGEX} ]]; then
       matching_targets+=("${candidate}")
     fi
   done < <(
-    find "${PRIVATE_OUT}/runs" -maxdepth 2 -name selected_targets.tsv -type f 2>/dev/null \
+    find "${PRIVATE_OUT}/runs" -name selected_targets.tsv -type f 2>/dev/null \
       | sort
   )
   if (( ${#matching_targets[@]} == 1 )); then
     target_for_manifest="${matching_targets[0]}"
+  elif (( ${#matching_targets[@]} > 1 )); then
+    generated_target_file="${USABLE_OUT}/_generated_selected_targets.tsv"
+    generated_target_sources=("${matching_targets[@]}")
+    target_for_manifest="${generated_target_file}"
   fi
 fi
 if [[ -z "${target_for_manifest}" && \
@@ -49,7 +57,7 @@ if [[ ! -d "${PRIVATE_OUT}/runs" ]]; then
   printf '[error] no private run output found under %s\n' "${PRIVATE_OUT}" >&2
   exit 2
 fi
-if [[ ! -f "${target_for_manifest}" ]]; then
+if [[ -z "${generated_target_file}" && ! -f "${target_for_manifest}" ]]; then
   printf '[error] missing target file for manifest: %s\n' "${target_for_manifest}" >&2
   exit 2
 fi
@@ -62,6 +70,17 @@ if is_truthy "${CLEAN_USABLE_OUT:-1}"; then
   rm -rf "${USABLE_OUT}"
 fi
 mkdir -p "${USABLE_OUT}"
+
+if [[ -n "${generated_target_file}" ]]; then
+  {
+    printf '# test\titeration\tseed\tbuild_mode\treason\n'
+    awk 'NF && $0 !~ /^#/ {print}' "${generated_target_sources[@]}" | awk '!seen[$0]++'
+  } > "${generated_target_file}"
+fi
+if [[ ! -f "${target_for_manifest}" ]]; then
+  printf '[error] missing target file for manifest: %s\n' "${target_for_manifest}" >&2
+  exit 2
+fi
 
 collector_args=(
   --private-root "${PRIVATE_OUT}"

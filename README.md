@@ -59,6 +59,11 @@ Status after reconnect:
 ./07_status_latest_run.sh
 ```
 
+This prints the latest detached run directory, recorded PID/PGID, live process
+count for that PGID, log byte count and age, started/done group counts, the
+last active group, the last scheduler error, newest per-test `run.log` files,
+artifact counts, and disk usage.
+
 If a full run is taking too long, stop the latest detached process group with a
 dry run first:
 
@@ -73,12 +78,18 @@ collect a bounded partial bundle by filtering to specific completed groups and
 making large VCDs header-only:
 
 ```bash
+STOP_CONFIRM=1 \
+COLLECT_AFTER_STOP=1 \
+PACK_AFTER_STOP=1 \
 COLLECT_INCLUDE_PRIVATE_PATH_REGEX='0004_chip_csr_hw_reset|0005_chip_csr_rw' \
 VCD_SIGNATURE_MAX_BYTES=100000000 \
-./08_collect_partial_usable_emissions.sh
-./03_pack_usable_emissions.sh
-du -sh usable-emissions opentitan-usable-emissions-*.tar.gz
+./10_stop_latest_detached.sh
 ```
+
+When the filter matches multiple per-group `selected_targets.tsv` files, the
+collector writes a scoped `_generated_selected_targets.tsv` in
+`usable-emissions/` so the manifest describes the exported groups, not the
+entire 2956-row dashboard.
 
 For the full overnight dashboard collection, run this instead of the default
 smoke eval:
@@ -125,7 +136,7 @@ Status and archive paths are printed in `detached-runs/latest/signal.log`:
 tail -n 100 detached-runs/latest/signal.log
 cat detached-runs/latest/archive_path
 cat detached-runs/latest/archive_bytes
-du -sh usable-emissions-signal-10h opentitan-usable-emissions-*.tar.gz
+du -sh usable-emissions-signal-10h "$(cat detached-runs/latest/archive_path)"
 ```
 
 To stop the latest detached run without hand-typing process-group commands:
