@@ -77,10 +77,15 @@ set -e
 printf '[detached-signal] run_rc=%s\n' "${run_rc}"
 printf '%s\n' "${run_rc}" > "__RUN_DIR__/run_rc"
 
-set +e
-./08_collect_partial_usable_emissions.sh
-collect_rc=$?
-set -e
+if [[ -f "${USABLE_OUT}/manifest.json" ]]; then
+  printf '[detached-signal] collect=reusing existing manifest from completed run\n'
+  collect_rc=0
+else
+  set +e
+  ./08_collect_partial_usable_emissions.sh
+  collect_rc=$?
+  set -e
+fi
 printf '[detached-signal] collect_rc=%s\n' "${collect_rc}"
 printf '%s\n' "${collect_rc}" > "__RUN_DIR__/collect_rc"
 
