@@ -6,6 +6,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common.sh"
 
 target_for_manifest="${PARTIAL_TARGET_FILE:-}"
+if [[ -z "${target_for_manifest}" && -n "${BATCH_NAME:-}" ]]; then
+  batch_slug="$(safe_slug "${BATCH_NAME}")"
+  if [[ -f "${PRIVATE_OUT}/runs/${batch_slug}/selected_targets.tsv" ]]; then
+    target_for_manifest="${PRIVATE_OUT}/runs/${batch_slug}/selected_targets.tsv"
+  fi
+fi
+if [[ -z "${target_for_manifest}" && -n "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" ]]; then
+  matching_targets=()
+  while IFS= read -r candidate; do
+    if [[ "${candidate}" =~ ${COLLECT_INCLUDE_PRIVATE_PATH_REGEX} ]]; then
+      matching_targets+=("${candidate}")
+    fi
+  done < <(
+    find "${PRIVATE_OUT}/runs" -maxdepth 2 -name selected_targets.tsv -type f 2>/dev/null \
+      | sort
+  )
+  if (( ${#matching_targets[@]} == 1 )); then
+    target_for_manifest="${matching_targets[0]}"
+  fi
+fi
+if [[ -z "${target_for_manifest}" && \
+      "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" == *signal-10h* && \
+      -f "${HARNESS_ROOT}/targets/xrun-10h-signal.tsv" ]]; then
+  target_for_manifest="${HARNESS_ROOT}/targets/xrun-10h-signal.tsv"
+fi
 if [[ -z "${target_for_manifest}" && -f "${PRIVATE_OUT}/runs/all-dashboard/selected_targets.tsv" ]]; then
   target_for_manifest="${PRIVATE_OUT}/runs/all-dashboard/selected_targets.tsv"
 fi
