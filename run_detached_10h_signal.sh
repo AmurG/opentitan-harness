@@ -112,7 +112,7 @@ if [[ "${collect_rc}" == "0" ]]; then
 fi
 printf '[detached-signal] archive_rc=%s\n' "${archive_rc}"
 printf '%s\n' "${archive_rc}" > "__RUN_DIR__/archive_rc"
-du -sh "${USABLE_OUT}" opentitan-usable-emissions-*.tar.gz 2>/dev/null || true
+du -sh "${USABLE_OUT}" "${ARCHIVE_NAME}" 2>/dev/null || true
 printf '[detached-signal] finished %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 if [[ "${collect_rc}" != "0" ]]; then
