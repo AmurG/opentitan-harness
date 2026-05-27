@@ -31,6 +31,21 @@ else
   missing=1
 fi
 
+if command -v pkg-config >/dev/null 2>&1; then
+  printf '[ok] pkg-config: %s\n' "$(command -v pkg-config)"
+  if pkg-config --exists libudev; then
+    printf '[ok] libudev.pc: %s\n' "$(pkg-config --modversion libudev)"
+  else
+    printf '[missing] pkg-config package libudev\n' >&2
+    printf '[hint] OpenTitan Rust SW builds need libudev.pc; install/load the libudev development package or set PKG_CONFIG_PATH to its directory.\n' >&2
+    missing=1
+  fi
+else
+  printf '[missing] pkg-config\n' >&2
+  printf '[hint] OpenTitan Rust SW builds need pkg-config and the libudev development package.\n' >&2
+  missing=1
+fi
+
 if command -v bazelisk >/dev/null 2>&1; then
   printf '[ok] bazelisk: %s\n' "$(command -v bazelisk)"
 elif command -v bazel >/dev/null 2>&1; then

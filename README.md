@@ -32,6 +32,11 @@ That starts prerequisite checking, OpenTitan setup, the full overnight Xcelium
 run, and packing under `nohup`/`setsid`, then returns immediately with the PID
 and log path. You can close the connection after it prints those paths.
 
+The prerequisite scan requires `pkg-config --exists libudev`. OpenTitan's Rust
+software build needs the system `libudev.pc` file; on common Linux
+distributions this comes from a package such as `systemd-devel` or
+`libudev-dev`, or from a site module that sets `PKG_CONFIG_PATH`.
+
 If you already ran setup and only want to launch the long job:
 
 ```bash
