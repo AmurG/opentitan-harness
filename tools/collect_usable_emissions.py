@@ -285,6 +285,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vcd-max-events-per-signal", type=int, default=64)
     parser.add_argument("--max-raw-wave-bytes", type=int, default=25_000_000)
     parser.add_argument("--export-raw-waves", action="store_true")
+    parser.add_argument(
+        "--format-label",
+        default="opentitan-xcelium-usable-emissions-v1",
+        help="Manifest format label for the emitted evidence bundle.",
+    )
+    parser.add_argument(
+        "--producer",
+        default="xcelium",
+        help="Tool or flow that produced the private/root inputs.",
+    )
     return parser.parse_args()
 
 
@@ -295,8 +305,10 @@ def main() -> int:
 
     manifest: dict[str, object] = {
         "created_utc": utc_now(),
-        "format": "opentitan-xcelium-usable-emissions-v1",
+        "format": args.format_label,
+        "producer": args.producer,
         "policy": {
+            "raw_wave_output_exported": bool(args.export_raw_waves),
             "raw_xcelium_output_exported": bool(args.export_raw_waves),
             "raw_output_source": str(args.private_root),
             "note": "Default output is derived summaries, filtered log excerpts, and VCD signatures.",
