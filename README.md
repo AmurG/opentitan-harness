@@ -56,9 +56,21 @@ RUN_SETUP=0 ./run_detached_overnight_all.sh
 Status after reconnect:
 
 ```bash
-tail -n 80 detached-runs/latest/overnight.log
-cat detached-runs/latest/status
-cat detached-runs/latest/archive_path
+./07_status_latest_run.sh
+```
+
+If a full run is taking too long, stop the active process group manually, then
+collect and pack whatever logs and VCDs already exist:
+
+```bash
+run=$(readlink -f detached-runs/latest)
+pid=$(cat "$run/pid")
+pgid=$(ps -o pgid= -p "$pid" | tr -d ' ')
+kill -TERM "-$pgid"
+sleep 10
+ps -p "$pid" >/dev/null 2>&1 && kill -KILL "-$pgid"
+./08_collect_partial_usable_emissions.sh
+./03_pack_usable_emissions.sh
 ```
 
 For the full overnight dashboard collection, run this instead of the default
@@ -109,6 +121,13 @@ local generated manifest. The overnight launcher groups those rows by test
 name and passes each group to DVSim with that test's exact seed list, avoiding
 DVSim's duplicate `-i` item collapse while keeping each group's raw logs and
 waves in a separate scratch tree.
+
+For flaky hosts or very large tests, split large seed groups into smaller
+chunks without changing the selected rows:
+
+```bash
+BATCH_GROUP_MAX_SEEDS=5 RUN_SETUP=0 ./run_detached_overnight_all.sh
+```
 
 `targets/xrun-frontier-missing57.tsv` is only the `57` concrete full-harness
 wrappers still missing from the local Arcilator retained-VCD coverage snapshot

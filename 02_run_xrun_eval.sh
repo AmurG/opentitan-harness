@@ -85,6 +85,7 @@ if is_truthy "${BATCH_TARGETS:-0}"; then
     printf 'DVSIM_WAVES=%s\n' "${DVSIM_WAVES}"
     printf 'RUN_ROOT=%s\n' "${run_root}"
     printf 'TARGET_FILE=%s\n' "${TARGET_FILE}"
+    printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
   } > "${run_root}/run.env"
   cp -f "${TARGET_FILE}" "${run_root}/selected_targets.tsv"
 
@@ -92,6 +93,7 @@ if is_truthy "${BATCH_TARGETS:-0}"; then
 from __future__ import annotations
 
 from collections import OrderedDict
+import os
 from pathlib import Path
 import re
 import sys
@@ -100,6 +102,15 @@ target_file = Path(sys.argv[1])
 run_root = Path(sys.argv[2])
 groups_dir = run_root / "groups"
 groups_dir.mkdir(parents=True, exist_ok=True)
+max_chunk_text = os.environ.get("BATCH_GROUP_MAX_SEEDS", "").strip()
+max_chunk = 0
+if max_chunk_text:
+    try:
+        max_chunk = int(max_chunk_text)
+    except ValueError:
+        raise SystemExit(f"BATCH_GROUP_MAX_SEEDS must be an integer, got {max_chunk_text!r}")
+    if max_chunk < 1:
+        raise SystemExit("BATCH_GROUP_MAX_SEEDS must be positive when set")
 
 def safe_slug(text: str) -> str:
     text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
@@ -116,17 +127,27 @@ for raw in target_file.read_text(encoding="utf-8", errors="replace").splitlines(
 
 with (run_root / "groups.tsv").open("w", encoding="utf-8") as manifest:
     manifest.write("group_idx\ttest\tseed_count\tseeds\tgroup_dir\n")
-    for idx, (test, rows) in enumerate(groups.items()):
-        group_dir = groups_dir / f"{idx:04d}_{safe_slug(test)}"
-        group_dir.mkdir(parents=True, exist_ok=True)
-        (group_dir / "selected_targets.tsv").write_text(
-            "# test\titeration\tseed\tbuild_mode\treason\n"
-            + "\n".join("\t".join(row) for row in rows)
-            + "\n",
-            encoding="utf-8",
-        )
-        seeds = ",".join(row[2] for row in rows)
-        manifest.write(f"{idx}\t{test}\t{len(rows)}\t{seeds}\t{group_dir}\n")
+    group_idx = 0
+    for test, rows in groups.items():
+        if max_chunk:
+            chunks = [rows[i : i + max_chunk] for i in range(0, len(rows), max_chunk)]
+        else:
+            chunks = [rows]
+        for chunk_idx, chunk in enumerate(chunks):
+            suffix = ""
+            if len(chunks) > 1:
+                suffix = f"__part{chunk_idx + 1:03d}of{len(chunks):03d}"
+            group_dir = groups_dir / f"{group_idx:04d}_{safe_slug(test)}{suffix}"
+            group_dir.mkdir(parents=True, exist_ok=True)
+            (group_dir / "selected_targets.tsv").write_text(
+                "# test\titeration\tseed\tbuild_mode\treason\n"
+                + "\n".join("\t".join(row) for row in chunk)
+                + "\n",
+                encoding="utf-8",
+            )
+            seeds = ",".join(row[2] for row in chunk)
+            manifest.write(f"{group_idx}\t{test}\t{len(chunk)}\t{seeds}\t{group_dir}\n")
+            group_idx += 1
 PY
 
   group_count="$(($(wc -l < "${run_root}/groups.tsv") - 1))"
@@ -135,8 +156,8 @@ PY
     printf 'GROUP_COUNT=%s\n' "${group_count}"
   } >> "${run_root}/run.env"
 
-  printf '[batch-run] name=%s targets=%s groups=%s mode=per-test-groups\n' \
-    "${batch_name}" "${target_rows}" "${group_count}"
+  printf '[batch-run] name=%s targets=%s groups=%s mode=per-test-groups max_seeds_per_group=%s\n' \
+    "${batch_name}" "${target_rows}" "${group_count}" "${BATCH_GROUP_MAX_SEEDS:-unlimited}"
   : > "${run_root}/command.sh"
 
   overall_rc=0
@@ -166,6 +187,8 @@ PY
       printf 'TARGET_COUNT=%s\n' "${seed_count}"
       printf 'SEEDS=%s\n' "${seed_csv}"
       printf 'DVSIM_MAX_WAVES_EFFECTIVE=%s\n' "${group_max_waves}"
+      printf 'GROUP_DIR=%s\n' "${group_dir}"
+      printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
     } > "${group_dir}/group.env"
 
     printf '[batch-group] %s/%s test=%s seeds=%s max_waves=%s\n' \
