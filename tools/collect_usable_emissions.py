@@ -397,8 +397,13 @@ def main() -> int:
         "policy": {
             "raw_wave_output_exported": bool(args.export_raw_waves),
             "raw_xcelium_output_exported": bool(args.export_raw_waves),
+            "bounded_log_excerpts_exported": True,
+            "large_log_tail_bytes": LARGE_LOG_TAIL_BYTES,
             "raw_output_source": str(args.private_root),
-            "note": "Default output is derived summaries, filtered log excerpts, and VCD signatures.",
+            "note": (
+                "Default output is derived summaries, filtered/bounded log excerpts, "
+                "and VCD signatures."
+            ),
             "include_private_path_regex": args.include_private_path_regex,
             "max_vcd_signature_bytes": args.max_vcd_signature_bytes,
         },
