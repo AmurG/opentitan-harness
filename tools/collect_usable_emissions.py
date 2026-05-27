@@ -153,7 +153,6 @@ def summarize_vcd(
     header_only: bool = False,
 ) -> dict[str, object]:
     scopes: list[str] = []
-    id_to_path: dict[str, str] = {}
     all_signal_hash = hashlib.sha256()
     prefix_counts: dict[str, int] = {}
     selected_ids: set[str] = set()
@@ -197,7 +196,6 @@ def summarize_vcd(
                 if m_var:
                     _size, ident, ref = m_var.groups()
                     full_path = ".".join([*scopes, ref.strip()])
-                    id_to_path[ident] = full_path
                     all_signal_hash.update(f"{full_path}\n".encode("utf-8"))
                     parts = [piece for piece in full_path.split(".") if piece]
                     prefix = ".".join(parts[:4]) if parts else "<root>"
