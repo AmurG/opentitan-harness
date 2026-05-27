@@ -56,6 +56,20 @@ else
 fi
 
 if is_truthy "${COLLECT_AFTER_STOP:-0}"; then
+  if [[ -z "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" && -f "${run}/signal.log" ]]; then
+    export COLLECT_INCLUDE_PRIVATE_PATH_REGEX="runs/signal-10h/"
+    if [[ "${USABLE_OUT}" == "${HARNESS_ROOT}/usable-emissions" ]]; then
+      export USABLE_OUT="${HARNESS_ROOT}/usable-emissions-signal-10h"
+    fi
+    export PARTIAL_TARGET_FILE="${PARTIAL_TARGET_FILE:-${HARNESS_ROOT}/targets/xrun-10h-signal.tsv}"
+    export VCD_SIGNATURE_MAX_BYTES="${VCD_SIGNATURE_MAX_BYTES:-100000000}"
+  fi
+  if [[ -z "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" && -f "${run}/overnight.log" ]]; then
+    if ! is_truthy "${ALLOW_UNFILTERED_COLLECT:-0}"; then
+      printf '[stop-latest] refusing unfiltered full-run collection; set COLLECT_INCLUDE_PRIVATE_PATH_REGEX or ALLOW_UNFILTERED_COLLECT=1\n' >&2
+      exit 2
+    fi
+  fi
   printf '[stop-latest] collecting partial usable emissions\n'
   ./08_collect_partial_usable_emissions.sh
   if is_truthy "${PACK_AFTER_STOP:-0}"; then

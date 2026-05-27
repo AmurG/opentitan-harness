@@ -135,9 +135,11 @@ To stop the latest detached run without hand-typing process-group commands:
 STOP_CONFIRM=1 ./10_stop_latest_detached.sh
 ```
 
-The first command is a dry run. To stop and immediately collect a filtered
-partial export, pass `COLLECT_AFTER_STOP=1` and the relevant collector filter
-environment.
+The first command is a dry run. To stop and immediately collect a partial
+export, pass `COLLECT_AFTER_STOP=1`. The helper uses bounded defaults for
+`signal-10h` runs. For full-dashboard runs, it refuses unfiltered collection
+unless `COLLECT_INCLUDE_PRIVATE_PATH_REGEX` or `ALLOW_UNFILTERED_COLLECT=1` is
+set.
 
 Default behavior:
 
