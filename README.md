@@ -107,6 +107,29 @@ For only the unresolved Arcilator frontier subset, run:
 ./03_pack_usable_emissions.sh
 ```
 
+For a bounded feedback run intended to finish in about ten hours and produce a
+small exportable bundle:
+
+```bash
+RUN_SETUP=0 ./run_detached_10h_signal.sh
+```
+
+This uses `targets/xrun-10h-signal.tsv`, a 57-row exact-seed subset ordered as
+calibration, current Arcilator frontier probes, subsystem smoke breadth, ROM /
+lifecycle coverage, and heavyweight one-seed sentinels. It uses
+`DVSIM_MAX_WAVES=1`, one seed per DVSim invocation, a `35m` per-group timeout,
+a `10h` outer timeout, no raw-wave export, and a separate
+`usable-emissions-signal-10h/` output directory. Large VCDs are summarized
+header-only by default above `100MB`.
+
+Status and archive paths are printed in `detached-runs/latest/signal.log`:
+
+```bash
+tail -n 100 detached-runs/latest/signal.log
+cat detached-runs/latest/archive_path
+du -sh usable-emissions-signal-10h opentitan-usable-emissions-*.tar.gz
+```
+
 Default behavior:
 
 - clones `lowRISC/opentitan`

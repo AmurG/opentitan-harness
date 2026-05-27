@@ -19,6 +19,10 @@ if ! is_truthy "${DVSIM_DRY_RUN:-0}" && ! command -v xrun >/dev/null 2>&1; then
   printf '[error] xrun not found on PATH\n' >&2
   exit 2
 fi
+if [[ -n "${DVSIM_GROUP_TIMEOUT:-}" ]] && ! command -v timeout >/dev/null 2>&1; then
+  printf '[error] DVSIM_GROUP_TIMEOUT is set but timeout(1) is unavailable\n' >&2
+  exit 2
+fi
 
 dvsim_cmd_text="$(resolve_dvsim_cmd)" || {
   printf '[error] could not find DVSim. Set DVSIM_BIN in config.env.\n' >&2
@@ -47,10 +51,24 @@ run_collector() {
     --vcd-max-events-per-signal "${VCD_MAX_EVENTS_PER_SIGNAL}"
     --max-raw-wave-bytes "${MAX_RAW_WAVE_BYTES}"
   )
+  if [[ -n "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" ]]; then
+    collector_args+=(--include-private-path-regex "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX}")
+  fi
+  if [[ -n "${VCD_SIGNATURE_MAX_BYTES:-}" ]]; then
+    collector_args+=(--max-vcd-signature-bytes "${VCD_SIGNATURE_MAX_BYTES}")
+  fi
   if is_truthy "${EXPORT_RAW_WAVES}"; then
     collector_args+=(--export-raw-waves)
   fi
   python3 "${HARNESS_ROOT}/tools/collect_usable_emissions.py" "${collector_args[@]}"
+}
+
+wrap_timeout_cmd() {
+  if [[ -n "${DVSIM_GROUP_TIMEOUT:-}" ]]; then
+    printf '%s\0' timeout -k "${DVSIM_GROUP_TIMEOUT_KILL_AFTER:-5m}" "${DVSIM_GROUP_TIMEOUT}" "$@"
+  else
+    printf '%s\0' "$@"
+  fi
 }
 
 if is_truthy "${BATCH_TARGETS:-0}"; then
@@ -86,6 +104,8 @@ if is_truthy "${BATCH_TARGETS:-0}"; then
     printf 'RUN_ROOT=%s\n' "${run_root}"
     printf 'TARGET_FILE=%s\n' "${TARGET_FILE}"
     printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
+    printf 'DVSIM_GROUP_TIMEOUT=%s\n' "${DVSIM_GROUP_TIMEOUT:-}"
+    printf 'DVSIM_GROUP_TIMEOUT_KILL_AFTER=%s\n' "${DVSIM_GROUP_TIMEOUT_KILL_AFTER:-}"
   } > "${run_root}/run.env"
   cp -f "${TARGET_FILE}" "${run_root}/selected_targets.tsv"
 
@@ -181,6 +201,7 @@ PY
       cmd+=("${extra_args[@]}")
     fi
     cmd+=(-i "${test}")
+    mapfile -d '' -t run_cmd < <(wrap_timeout_cmd "${cmd[@]}")
 
     {
       printf 'TEST=%s\n' "${test}"
@@ -189,6 +210,7 @@ PY
       printf 'DVSIM_MAX_WAVES_EFFECTIVE=%s\n' "${group_max_waves}"
       printf 'GROUP_DIR=%s\n' "${group_dir}"
       printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
+      printf 'DVSIM_GROUP_TIMEOUT=%s\n' "${DVSIM_GROUP_TIMEOUT:-}"
     } > "${group_dir}/group.env"
 
     printf '[batch-group] %s/%s test=%s seeds=%s max_waves=%s\n' \
@@ -196,7 +218,7 @@ PY
     {
       printf '# group %s/%s test=%s seeds=%s\n' \
         "$((group_idx + 1))" "${group_count}" "${test}" "${seed_count}"
-      printf '%q ' "${cmd[@]}"
+      printf '%q ' "${run_cmd[@]}"
       printf '\n'
     } > "${group_dir}/command.sh"
     cat "${group_dir}/command.sh" >> "${run_root}/command.sh"
@@ -210,7 +232,7 @@ PY
     set +e
     (
       cd "${OPENTITAN_ROOT}"
-      "${cmd[@]}"
+      "${run_cmd[@]}"
     ) > >(tee "${group_dir}/dvsim.console.log") 2> >(tee "${group_dir}/dvsim.console.err" >&2)
     rc=$?
     set -e
@@ -270,9 +292,10 @@ while IFS=$'\t' read -r test iteration seed build_mode reason; do
     read -r -a extra_args <<< "${DVSIM_EXTRA_ARGS}"
     cmd+=("${extra_args[@]}")
   fi
+  mapfile -d '' -t run_cmd < <(wrap_timeout_cmd "${cmd[@]}")
 
   printf '[run] %s seed=%s reason=%s\n' "${test}" "${seed}" "${reason}"
-  printf '%q ' "${cmd[@]}" > "${run_root}/command.sh"
+  printf '%q ' "${run_cmd[@]}" > "${run_root}/command.sh"
   printf '\n' >> "${run_root}/command.sh"
 
   if is_truthy "${DVSIM_DRY_RUN:-0}"; then
@@ -284,7 +307,7 @@ while IFS=$'\t' read -r test iteration seed build_mode reason; do
   set +e
   (
     cd "${OPENTITAN_ROOT}"
-    "${cmd[@]}"
+    "${run_cmd[@]}"
   ) > >(tee "${run_root}/dvsim.console.log") 2> >(tee "${run_root}/dvsim.console.err" >&2)
   rc=$?
   set -e

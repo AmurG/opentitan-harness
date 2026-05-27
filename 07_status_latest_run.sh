@@ -40,22 +40,36 @@ else
 fi
 
 printf '%s\n' '---- progress ----'
-if [[ -f "${run}/overnight.log" ]]; then
+log_file=""
+for candidate in "${run}/signal.log" "${run}/overnight.log"; do
+  if [[ -f "${candidate}" ]]; then
+    log_file="${candidate}"
+    break
+  fi
+done
+
+if [[ -n "${log_file}" ]]; then
+  printf 'log=%s\n' "${log_file}"
+  for rc_file in run_rc collect_rc archive_rc archive_path; do
+    if [[ -f "${run}/${rc_file}" ]]; then
+      printf '%s=%s\n' "${rc_file}" "$(cat "${run}/${rc_file}")"
+    fi
+  done
   grep -E '^\[batch-run\]|^\[batch-group\]|^\[batch-group-done\]|\[batch-done\]|ERROR: \[Scheduler\]|FAILED:|Traceback|Exception' \
-    "${run}/overnight.log" | tail -120 || true
+    "${log_file}" | tail -120 || true
   printf '%s\n' '---- log tail ----'
-  tail -n 80 "${run}/overnight.log" || true
+  tail -n 80 "${log_file}" || true
 else
-  printf 'overnight log not found\n'
+  printf 'detached log not found\n'
 fi
 
 printf '%s\n' '---- artifacts ----'
-find "${PRIVATE_OUT}/runs/all-dashboard/groups" -path '*/latest/run.log' -type f 2>/dev/null | wc -l | awk '{print "run_logs=" $1}'
-find "${PRIVATE_OUT}/runs/all-dashboard/groups" -type f \( -name '*.vcd' -o -name '*.evcd' \) 2>/dev/null | wc -l | awk '{print "waves=" $1}'
-du -sh "${PRIVATE_OUT}" "${USABLE_OUT}" "${DETACHED_ROOT:-${HARNESS_ROOT}/detached-runs}" 2>/dev/null || true
+find "${PRIVATE_OUT}/runs" -path '*/groups/*/latest/run.log' -type f 2>/dev/null | wc -l | awk '{print "run_logs=" $1}'
+find "${PRIVATE_OUT}/runs" -type f \( -name '*.vcd' -o -name '*.evcd' \) 2>/dev/null | wc -l | awk '{print "waves=" $1}'
+du -sh "${PRIVATE_OUT}" "${HARNESS_ROOT}"/usable-emissions* "${DETACHED_ROOT:-${HARNESS_ROOT}/detached-runs}" 2>/dev/null || true
 df -h . || true
 
 printf '%s\n' '---- related processes ----'
 ps -u "${USER}" -o pid,ppid,pgid,sid,etime,stat,cmd \
-  | grep -E 'screen|run_detached|overnight|dvsim|xrun|xcelium|bazel|bazelisk' \
+  | grep -E 'screen|run_detached|overnight|signal|dvsim|xrun|xcelium|bazel|bazelisk' \
   | grep -v grep || true
