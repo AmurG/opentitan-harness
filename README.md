@@ -59,23 +59,18 @@ Status after reconnect:
 ./07_status_latest_run.sh
 ```
 
-If a full run is taking too long, stop the active process group manually, then
-collect and pack whatever logs and VCDs already exist:
+If a full run is taking too long, stop the latest detached process group with a
+dry run first:
 
 ```bash
-run=$(readlink -f detached-runs/latest)
-pid=$(cat "$run/pid")
-pgid=$(ps -o pgid= -p "$pid" | tr -d ' ')
-kill -TERM "-$pgid"
-sleep 10
-ps -p "$pid" >/dev/null 2>&1 && kill -KILL "-$pgid"
-./08_collect_partial_usable_emissions.sh
-./03_pack_usable_emissions.sh
+./10_stop_latest_detached.sh
+STOP_CONFIRM=1 ./10_stop_latest_detached.sh
 ```
 
 Do not export `private-xrun/` itself. It can be hundreds of GB and may contain
-license-bound raw simulator output. For a smaller feedback bundle, filter to
-specific completed groups and make large VCDs header-only:
+license-bound raw simulator output. After stopping a large full-dashboard run,
+collect a bounded partial bundle by filtering to specific completed groups and
+making large VCDs header-only:
 
 ```bash
 COLLECT_INCLUDE_PRIVATE_PATH_REGEX='0004_chip_csr_hw_reset|0005_chip_csr_rw' \
