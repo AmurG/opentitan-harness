@@ -20,6 +20,8 @@ IMPORTANT_LOG_RE = re.compile(
 TIME_RE = re.compile(r"^#([0-9]+)\s*$")
 VAR_RE = re.compile(r"^\$var\s+\S+\s+(\d+)\s+(\S+)\s+(.+?)\s+\$end\s*$")
 SCOPE_RE = re.compile(r"^\$scope\s+\S+\s+(.+?)\s+\$end\s*$")
+MAX_LOG_READ_BYTES = 25_000_000
+LARGE_LOG_TAIL_BYTES = 1_000_000
 
 
 def utc_now() -> str:
@@ -136,6 +138,45 @@ def write_log_excerpt(paths: list[Path], out_path: Path, tail_lines: int) -> Non
         selected.extend(lines[-tail_lines:])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(selected) + "\n", encoding="utf-8")
+
+
+def tail_lines_bounded(path: Path, *, max_lines: int, max_bytes: int) -> list[str]:
+    size = path.stat().st_size
+    with path.open("rb") as f:
+        if size > max_bytes:
+            f.seek(size - max_bytes)
+            data = f.read()
+            prefix = f"<tail truncated to last {max_bytes} bytes of {size}>"
+        else:
+            data = f.read()
+            prefix = ""
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    if prefix:
+        return [prefix, *lines[1:][-max_lines:]]
+    return lines[-max_lines:]
+
+
+def write_large_log_tails(paths: list[Path], out_path: Path, tail_lines: int) -> str | None:
+    if not paths:
+        return None
+    selected: list[str] = []
+    for path in paths:
+        selected.append(
+            f"===== {path.name} tail, bounded to {LARGE_LOG_TAIL_BYTES} bytes ====="
+        )
+        try:
+            selected.extend(
+                tail_lines_bounded(
+                    path,
+                    max_lines=tail_lines,
+                    max_bytes=LARGE_LOG_TAIL_BYTES,
+                )
+            )
+        except OSError as exc:
+            selected.append(f"<read failed: {exc}>")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(selected) + "\n", encoding="utf-8")
+    return str(out_path)
 
 
 def load_patterns(path: Path) -> list[re.Pattern[str]]:
@@ -267,7 +308,7 @@ def summarize_vcd(
 
 def discover_files(
     run_dir: Path, private_root: Path, include_private_path_re: re.Pattern[str] | None
-) -> tuple[list[Path], list[Path]]:
+) -> tuple[list[Path], list[Path], list[Path]]:
     def included(path: Path) -> bool:
         if include_private_path_re is None:
             return True
@@ -277,20 +318,21 @@ def discover_files(
             text = str(path)
         return bool(include_private_path_re.search(text))
 
-    logs = sorted(
+    all_logs = sorted(
         p
         for p in run_dir.rglob("*")
         if p.is_file()
         and included(p)
         and p.suffix.lower() in {".log", ".err"}
-        and p.stat().st_size < 25_000_000
     )
+    logs = [p for p in all_logs if p.stat().st_size < MAX_LOG_READ_BYTES]
+    large_logs = [p for p in all_logs if p.stat().st_size >= MAX_LOG_READ_BYTES]
     waves = sorted(
         p
         for p in run_dir.rglob("*")
         if p.is_file() and included(p) and p.suffix.lower() in {".vcd", ".evcd"}
     )
-    return logs, waves
+    return logs, large_logs, waves
 
 
 def copy_raw_wave(path: Path, out_path: Path) -> None:
@@ -372,7 +414,9 @@ def main() -> int:
         slug = run_dir.name
         out_dir = args.usable_out / "runs" / slug
         out_dir.mkdir(parents=True, exist_ok=True)
-        logs, waves = discover_files(run_dir, args.private_root, include_private_path_re)
+        logs, large_logs, waves = discover_files(
+            run_dir, args.private_root, include_private_path_re
+        )
 
         summary: dict[str, object] = {
             "slug": slug,
@@ -386,7 +430,21 @@ def main() -> int:
                 }
                 for path in logs
             ],
+            "large_logs": [
+                {
+                    "name": path.name,
+                    "relative_private_path": str(path.relative_to(args.private_root)),
+                    "bytes": path.stat().st_size,
+                    "sha256": sha256_file(path, MAX_LOG_READ_BYTES),
+                    "note": (
+                        f"larger than {MAX_LOG_READ_BYTES} bytes; only bounded tail "
+                        "excerpt exported"
+                    ),
+                }
+                for path in large_logs
+            ],
             "log_counts": log_counts(logs),
+            "log_counts_scope": f"logs smaller than {MAX_LOG_READ_BYTES} bytes",
             "waves": [],
         }
         copied_command = copy_text_if_present(run_dir / "command.sh", out_dir / "command.sh")
@@ -401,6 +459,11 @@ def main() -> int:
         if copied_targets:
             summary["selected_targets_tsv"] = str(Path(copied_targets).relative_to(args.usable_out))
         write_log_excerpt(logs, out_dir / "log_excerpt.txt", args.log_excerpt_lines)
+        large_log_tail = write_large_log_tails(
+            large_logs, out_dir / "large_log_tails.txt", args.log_excerpt_lines
+        )
+        if large_log_tail:
+            summary["large_log_tails"] = str(Path(large_log_tail).relative_to(args.usable_out))
 
         for wave in waves:
             relative_wave_path = wave.relative_to(args.private_root)

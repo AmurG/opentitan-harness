@@ -162,8 +162,8 @@ Default behavior:
 - requests VCD waves by default because the local comparison worker can parse
   them without Xcelium
 - keeps raw simulator output under `private-xrun/`
-- writes only derived summaries, filtered log excerpts, and VCD signatures to
-  `usable-emissions/`
+- writes only derived summaries, filtered log excerpts, bounded tails for
+  oversized logs, and VCD signatures to `usable-emissions/`
 
 Do not tar `work/` or `private-xrun/` for transfer. Tar only
 `usable-emissions/` or the archive created by `03_pack_usable_emissions.sh`.
