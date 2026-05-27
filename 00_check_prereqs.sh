@@ -38,6 +38,7 @@ if command -v pkg-config >/dev/null 2>&1; then
   else
     printf '[missing] pkg-config package libudev\n' >&2
     printf '[hint] OpenTitan Rust SW builds need libudev.pc; install/load the libudev development package or set PKG_CONFIG_PATH to its directory.\n' >&2
+    printf '[hint] On no-sudo Rocky/RHEL hosts, try ./06_bootstrap_rocky8_libudev_user.sh.\n' >&2
     missing=1
   fi
 else

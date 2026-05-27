@@ -36,6 +36,16 @@ The prerequisite scan requires `pkg-config --exists libudev`. OpenTitan's Rust
 software build needs the system `libudev.pc` file; on common Linux
 distributions this comes from a package such as `systemd-devel` or
 `libudev-dev`, or from a site module that sets `PKG_CONFIG_PATH`.
+On a no-sudo Rocky/RHEL 8 host, try:
+
+```bash
+./06_bootstrap_rocky8_libudev_user.sh
+./00_check_prereqs.sh
+```
+
+The bootstrap script downloads/extracts the `systemd-devel` RPM into `work/`,
+copies the host runtime `libudev.so.1`, writes a user-local `libudev.pc`, and
+updates `config.env` with the needed environment.
 
 If you already ran setup and only want to launch the long job:
 
