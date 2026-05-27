@@ -32,6 +32,8 @@ else
 fi
 pid="$(cat "${run}/pid" 2>/dev/null || true)"
 printf 'pid=%s\n' "${pid:-none}"
+pgid="$(cat "${run}/pgid" 2>/dev/null || true)"
+printf 'pgid=%s\n' "${pgid:-unknown}"
 if [[ -n "${pid}" ]]; then
   ps -p "${pid}" -o pid,ppid,pgid,sid,etime,stat,cmd 2>/dev/null || \
     printf 'supervisor-not-running\n'

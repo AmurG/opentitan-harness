@@ -17,15 +17,33 @@ fi
 
 run="$(readlink -f "${latest}")"
 pid="$(cat "${run}/pid" 2>/dev/null || true)"
+stored_pgid="$(cat "${run}/pgid" 2>/dev/null || true)"
 printf '[stop-latest] run=%s\n' "${run}"
 printf '[stop-latest] pid=%s\n' "${pid:-none}"
+printf '[stop-latest] pgid=%s\n' "${stored_pgid:-unknown}"
 
 live=0
+pgid_to_stop=""
 if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
   live=1
   ps -p "${pid}" -o pid,ppid,pgid,sid,etime,stat,cmd || true
+  pgid_to_stop="$(ps -o pgid= -p "${pid}" | tr -d ' ')"
 else
   printf '[stop-latest] supervisor-not-running\n'
+  if [[ -n "${stored_pgid}" ]]; then
+    related="$(
+      ps -u "${USER}" -o pid=,pgid=,cmd= \
+        | awk -v pgid="${stored_pgid}" '$2 == pgid {print $1}' \
+        | tr '\n' ' '
+    )"
+    if [[ -n "${related// /}" ]]; then
+      live=1
+      pgid_to_stop="${stored_pgid}"
+      printf '[stop-latest] related-processes-in-pgid=%s\n' "${related}"
+      ps -u "${USER}" -o pid,ppid,pgid,sid,etime,stat,cmd \
+        | awk -v pgid="${stored_pgid}" '$3 == pgid {print}'
+    fi
+  fi
 fi
 
 if (( live )); then
@@ -35,19 +53,23 @@ if (( live )); then
     exit 2
   fi
 
-  pgid="$(ps -o pgid= -p "${pid}" | tr -d ' ')"
-  if [[ -z "${pgid}" || "${pgid}" == "0" ]]; then
-    printf '[stop-latest] could not determine process group for pid=%s\n' "${pid}" >&2
+  if [[ -z "${pgid_to_stop}" || "${pgid_to_stop}" == "0" ]]; then
+    printf '[stop-latest] could not determine process group for pid=%s\n' "${pid:-none}" >&2
     exit 2
   fi
 
   printf '%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "${run}/stop_requested_utc"
-  printf '[stop-latest] TERM process group %s\n' "${pgid}"
-  kill -TERM "-${pgid}" 2>/dev/null || true
+  printf '[stop-latest] TERM process group %s\n' "${pgid_to_stop}"
+  kill -TERM "-${pgid_to_stop}" 2>/dev/null || true
   sleep "${grace}"
-  if kill -0 "${pid}" 2>/dev/null; then
-    printf '[stop-latest] KILL process group %s after %ss grace\n' "${pgid}" "${grace}"
-    kill -KILL "-${pgid}" 2>/dev/null || true
+  remaining="$(
+    ps -u "${USER}" -o pid=,pgid=,cmd= \
+      | awk -v pgid="${pgid_to_stop}" '$2 == pgid {print $1}' \
+      | tr '\n' ' '
+  )"
+  if [[ -n "${remaining// /}" ]]; then
+    printf '[stop-latest] KILL process group %s after %ss grace\n' "${pgid_to_stop}" "${grace}"
+    kill -KILL "-${pgid_to_stop}" 2>/dev/null || true
   fi
 else
   if [[ -f "${run}/status" ]]; then

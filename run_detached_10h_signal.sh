@@ -10,6 +10,7 @@ detached_root="${DETACHED_ROOT:-${HARNESS_ROOT}/detached-runs}"
 run_dir="${detached_root}/${run_id}"
 log_path="${run_dir}/signal.log"
 pid_path="${run_dir}/pid"
+pgid_path="${run_dir}/pgid"
 status_path="${run_dir}/status"
 
 if [[ -e "${run_dir}" ]]; then
@@ -25,6 +26,14 @@ if [[ -f "${detached_root}/latest/pid" ]] && ! is_truthy "${ALLOW_PARALLEL:-0}";
   old_pid="$(cat "${detached_root}/latest/pid" 2>/dev/null || true)"
   if [[ -n "${old_pid}" ]] && kill -0 "${old_pid}" 2>/dev/null; then
     printf '[error] existing detached run appears active: pid=%s\n' "${old_pid}" >&2
+    printf '[hint] inspect: %s\n' "${detached_root}/latest" >&2
+    printf '[hint] set ALLOW_PARALLEL=1 to launch another run anyway\n' >&2
+    exit 2
+  fi
+  old_pgid="$(cat "${detached_root}/latest/pgid" 2>/dev/null || true)"
+  if [[ -n "${old_pgid}" ]] && \
+     ps -u "${USER}" -o pid=,pgid=,cmd= | awk -v pgid="${old_pgid}" '$2 == pgid {found=1} END {exit found ? 0 : 1}'; then
+    printf '[error] existing detached run process group appears active: pgid=%s\n' "${old_pgid}" >&2
     printf '[hint] inspect: %s\n' "${detached_root}/latest" >&2
     printf '[hint] set ALLOW_PARALLEL=1 to launch another run anyway\n' >&2
     exit 2
@@ -166,8 +175,13 @@ fi
 "${launcher[@]}" > "${log_path}" 2>&1 < /dev/null &
 pid=$!
 printf '%s\n' "${pid}" > "${pid_path}"
+pgid="$(ps -o pgid= -p "${pid}" 2>/dev/null | tr -d ' ' || true)"
+if [[ -n "${pgid}" ]]; then
+  printf '%s\n' "${pgid}" > "${pgid_path}"
+fi
 
 printf '[detached-signal] launched pid=%s\n' "${pid}"
+printf '[detached-signal] launched pgid=%s\n' "${pgid:-unknown}"
 printf '[detached-signal] run_dir=%s\n' "${run_dir}"
 printf '[detached-signal] log=%s\n' "${log_path}"
 printf '[detached-signal] status=%s\n' "${status_path}"
