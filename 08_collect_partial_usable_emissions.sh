@@ -54,6 +54,13 @@ if [[ ! -f "${target_for_manifest}" ]]; then
   exit 2
 fi
 
+if is_truthy "${CLEAN_USABLE_OUT:-1}"; then
+  if [[ -z "${USABLE_OUT}" || "${USABLE_OUT}" == "/" ]]; then
+    printf '[error] refusing to clean unsafe USABLE_OUT=%s\n' "${USABLE_OUT}" >&2
+    exit 2
+  fi
+  rm -rf "${USABLE_OUT}"
+fi
 mkdir -p "${USABLE_OUT}"
 
 collector_args=(
@@ -81,6 +88,7 @@ printf '[collect-partial] usable-out=%s\n' "${USABLE_OUT}"
 printf '[collect-partial] target-file=%s\n' "${target_for_manifest}"
 printf '[collect-partial] include-private-path-regex=%s\n' "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-<all>}"
 printf '[collect-partial] max-vcd-signature-bytes=%s\n' "${VCD_SIGNATURE_MAX_BYTES:-<unlimited>}"
+printf '[collect-partial] clean-usable-out=%s\n' "${CLEAN_USABLE_OUT:-1}"
 printf '[collect-partial] note=best run after stopping the active simulator, or while accepting a race with live-written logs/waves\n'
 
 python3 "${HARNESS_ROOT}/tools/collect_usable_emissions.py" "${collector_args[@]}"
