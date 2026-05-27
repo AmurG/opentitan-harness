@@ -150,6 +150,7 @@ def summarize_vcd(
     max_signals: int,
     max_events_per_signal: int,
     hash_limit: int,
+    header_only: bool = False,
 ) -> dict[str, object]:
     scopes: list[str] = []
     id_to_path: dict[str, str] = {}
@@ -167,6 +168,7 @@ def summarize_vcd(
         "selected_signal_count": 0,
         "time_markers": 0,
         "max_time": 0,
+        "signature_mode": "header_only" if header_only else "full",
     }
     if stats["sha256"] is None:
         stats["sha256_omitted_reason"] = f"file larger than hash_limit={hash_limit}"
@@ -179,6 +181,8 @@ def summarize_vcd(
             if in_header:
                 if line.startswith("$enddefinitions"):
                     in_header = False
+                    if header_only:
+                        break
                     continue
                 m_scope = SCOPE_RE.match(line)
                 if m_scope:
@@ -254,16 +258,30 @@ def summarize_vcd(
     return {"stats": stats, "signals": signals}
 
 
-def discover_files(run_dir: Path) -> tuple[list[Path], list[Path]]:
+def discover_files(
+    run_dir: Path, private_root: Path, include_private_path_re: re.Pattern[str] | None
+) -> tuple[list[Path], list[Path]]:
+    def included(path: Path) -> bool:
+        if include_private_path_re is None:
+            return True
+        try:
+            text = str(path.relative_to(private_root))
+        except ValueError:
+            text = str(path)
+        return bool(include_private_path_re.search(text))
+
     logs = sorted(
         p
         for p in run_dir.rglob("*")
-        if p.is_file() and p.suffix.lower() in {".log", ".err"} and p.stat().st_size < 25_000_000
+        if p.is_file()
+        and included(p)
+        and p.suffix.lower() in {".log", ".err"}
+        and p.stat().st_size < 25_000_000
     )
     waves = sorted(
         p
         for p in run_dir.rglob("*")
-        if p.is_file() and p.suffix.lower() in {".vcd", ".evcd"}
+        if p.is_file() and included(p) and p.suffix.lower() in {".vcd", ".evcd"}
     )
     return logs, waves
 
@@ -284,6 +302,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--vcd-max-signals", type=int, default=200)
     parser.add_argument("--vcd-max-events-per-signal", type=int, default=64)
     parser.add_argument("--max-raw-wave-bytes", type=int, default=25_000_000)
+    parser.add_argument(
+        "--max-vcd-signature-bytes",
+        type=int,
+        default=0,
+        help=(
+            "If positive, VCD/EVCD files larger than this are summarized from "
+            "their header only instead of scanning all value changes."
+        ),
+    )
+    parser.add_argument(
+        "--include-private-path-regex",
+        default="",
+        help=(
+            "Optional regex matched against private-root-relative paths. Use it "
+            "to collect only selected groups/tests from a large private tree."
+        ),
+    )
     parser.add_argument("--export-raw-waves", action="store_true")
     parser.add_argument(
         "--format-label",
@@ -301,6 +336,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     patterns = load_patterns(args.signal_patterns)
+    include_private_path_re = (
+        re.compile(args.include_private_path_regex) if args.include_private_path_regex else None
+    )
     args.usable_out.mkdir(parents=True, exist_ok=True)
 
     manifest: dict[str, object] = {
@@ -312,6 +350,8 @@ def main() -> int:
             "raw_xcelium_output_exported": bool(args.export_raw_waves),
             "raw_output_source": str(args.private_root),
             "note": "Default output is derived summaries, filtered log excerpts, and VCD signatures.",
+            "include_private_path_regex": args.include_private_path_regex,
+            "max_vcd_signature_bytes": args.max_vcd_signature_bytes,
         },
         "target_file": str(args.target_file),
         "targets": parse_target_file(args.target_file),
@@ -325,7 +365,7 @@ def main() -> int:
         slug = run_dir.name
         out_dir = args.usable_out / "runs" / slug
         out_dir.mkdir(parents=True, exist_ok=True)
-        logs, waves = discover_files(run_dir)
+        logs, waves = discover_files(run_dir, args.private_root, include_private_path_re)
 
         summary: dict[str, object] = {
             "slug": slug,
@@ -362,17 +402,26 @@ def main() -> int:
                 "bytes": wave.stat().st_size,
             }
             if wave.suffix.lower() in {".vcd", ".evcd"}:
+                header_only = (
+                    args.max_vcd_signature_bytes > 0
+                    and wave.stat().st_size > args.max_vcd_signature_bytes
+                )
                 sig = summarize_vcd(
                     wave,
                     patterns,
                     max_signals=args.vcd_max_signals,
                     max_events_per_signal=args.vcd_max_events_per_signal,
                     hash_limit=args.max_raw_wave_bytes,
+                    header_only=header_only,
                 )
                 sig_path = out_dir / f"{wave.stem}_signature.json"
                 write_json(sig_path, sig)
                 wave_entry["signature_json"] = str(sig_path.relative_to(args.usable_out))
                 wave_entry["stats"] = sig["stats"]
+                if header_only:
+                    wave_entry["signature_note"] = (
+                        "header-only because wave exceeds max_vcd_signature_bytes"
+                    )
             if args.export_raw_waves and wave.stat().st_size <= args.max_raw_wave_bytes:
                 raw_out = out_dir / f"{wave.name}.gz"
                 copy_raw_wave(wave, raw_out)

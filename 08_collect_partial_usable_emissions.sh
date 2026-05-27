@@ -41,6 +41,12 @@ collector_args=(
   --vcd-max-events-per-signal "${VCD_MAX_EVENTS_PER_SIGNAL}"
   --max-raw-wave-bytes "${MAX_RAW_WAVE_BYTES}"
 )
+if [[ -n "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" ]]; then
+  collector_args+=(--include-private-path-regex "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX}")
+fi
+if [[ -n "${VCD_SIGNATURE_MAX_BYTES:-}" ]]; then
+  collector_args+=(--max-vcd-signature-bytes "${VCD_SIGNATURE_MAX_BYTES}")
+fi
 if is_truthy "${EXPORT_RAW_WAVES}"; then
   collector_args+=(--export-raw-waves)
 fi
@@ -48,6 +54,8 @@ fi
 printf '[collect-partial] private-root=%s\n' "${PRIVATE_OUT}"
 printf '[collect-partial] usable-out=%s\n' "${USABLE_OUT}"
 printf '[collect-partial] target-file=%s\n' "${target_for_manifest}"
+printf '[collect-partial] include-private-path-regex=%s\n' "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-<all>}"
+printf '[collect-partial] max-vcd-signature-bytes=%s\n' "${VCD_SIGNATURE_MAX_BYTES:-<unlimited>}"
 printf '[collect-partial] note=best run after stopping the active simulator, or while accepting a race with live-written logs/waves\n'
 
 python3 "${HARNESS_ROOT}/tools/collect_usable_emissions.py" "${collector_args[@]}"

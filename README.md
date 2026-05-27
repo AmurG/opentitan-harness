@@ -73,6 +73,18 @@ ps -p "$pid" >/dev/null 2>&1 && kill -KILL "-$pgid"
 ./03_pack_usable_emissions.sh
 ```
 
+Do not export `private-xrun/` itself. It can be hundreds of GB and may contain
+license-bound raw simulator output. For a smaller feedback bundle, filter to
+specific completed groups and make large VCDs header-only:
+
+```bash
+COLLECT_INCLUDE_PRIVATE_PATH_REGEX='0004_chip_csr_hw_reset|0005_chip_csr_rw' \
+VCD_SIGNATURE_MAX_BYTES=100000000 \
+./08_collect_partial_usable_emissions.sh
+./03_pack_usable_emissions.sh
+du -sh usable-emissions opentitan-usable-emissions-*.tar.gz
+```
+
 For the full overnight dashboard collection, run this instead of the default
 smoke eval:
 
