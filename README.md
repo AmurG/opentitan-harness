@@ -133,6 +133,17 @@ cat detached-runs/latest/archive_bytes
 du -sh usable-emissions-signal-10h opentitan-usable-emissions-*.tar.gz
 ```
 
+To stop the latest detached run without hand-typing process-group commands:
+
+```bash
+./10_stop_latest_detached.sh
+STOP_CONFIRM=1 ./10_stop_latest_detached.sh
+```
+
+The first command is a dry run. To stop and immediately collect a filtered
+partial export, pass `COLLECT_AFTER_STOP=1` and the relevant collector filter
+environment.
+
 Default behavior:
 
 - clones `lowRISC/opentitan`
