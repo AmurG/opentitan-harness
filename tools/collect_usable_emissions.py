@@ -53,6 +53,15 @@ def write_json(path: Path, data: object) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def safe_artifact_name(path: Path) -> str:
+    text = str(path)
+    text = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("._-")
+    if len(text) > 180:
+        digest = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:16]
+        text = f"{text[:160]}_{digest}"
+    return text or "artifact"
+
+
 def copy_text_if_present(src: Path, dst: Path) -> str | None:
     if not src.is_file():
         return None
@@ -394,9 +403,11 @@ def main() -> int:
         write_log_excerpt(logs, out_dir / "log_excerpt.txt", args.log_excerpt_lines)
 
         for wave in waves:
+            relative_wave_path = wave.relative_to(args.private_root)
+            artifact_base = safe_artifact_name(relative_wave_path)
             wave_entry: dict[str, object] = {
                 "name": wave.name,
-                "relative_private_path": str(wave.relative_to(args.private_root)),
+                "relative_private_path": str(relative_wave_path),
                 "bytes": wave.stat().st_size,
             }
             if wave.suffix.lower() in {".vcd", ".evcd"}:
@@ -412,7 +423,7 @@ def main() -> int:
                     hash_limit=args.max_raw_wave_bytes,
                     header_only=header_only,
                 )
-                sig_path = out_dir / f"{wave.stem}_signature.json"
+                sig_path = out_dir / f"{artifact_base}_signature.json"
                 write_json(sig_path, sig)
                 wave_entry["signature_json"] = str(sig_path.relative_to(args.usable_out))
                 wave_entry["stats"] = sig["stats"]
@@ -421,7 +432,7 @@ def main() -> int:
                         "header-only because wave exceeds max_vcd_signature_bytes"
                     )
             if args.export_raw_waves and wave.stat().st_size <= args.max_raw_wave_bytes:
-                raw_out = out_dir / f"{wave.name}.gz"
+                raw_out = out_dir / f"{artifact_base}.gz"
                 copy_raw_wave(wave, raw_out)
                 wave_entry["exported_raw_gzip"] = str(raw_out.relative_to(args.usable_out))
             summary["waves"].append(wave_entry)

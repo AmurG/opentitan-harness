@@ -64,9 +64,15 @@ else
 fi
 
 printf '%s\n' '---- artifacts ----'
-find "${PRIVATE_OUT}/runs" -path '*/groups/*/latest/run.log' -type f 2>/dev/null | wc -l | awk '{print "run_logs=" $1}'
-find "${PRIVATE_OUT}/runs" -type f \( -name '*.vcd' -o -name '*.evcd' \) 2>/dev/null | wc -l | awk '{print "waves=" $1}'
-du -sh "${PRIVATE_OUT}" "${HARNESS_ROOT}"/usable-emissions* "${DETACHED_ROOT:-${HARNESS_ROOT}/detached-runs}" 2>/dev/null || true
+artifact_root="${PRIVATE_OUT}/runs"
+if [[ -f "${run}/signal.log" && -d "${PRIVATE_OUT}/runs/signal-10h" ]]; then
+  artifact_root="${PRIVATE_OUT}/runs/signal-10h"
+fi
+printf 'artifact_root=%s\n' "${artifact_root}"
+find "${artifact_root}" -path '*/latest/run.log' -type f 2>/dev/null | wc -l | awk '{print "run_logs=" $1}'
+find "${artifact_root}" -type f \( -name '*.vcd' -o -name '*.evcd' \) 2>/dev/null | wc -l | awk '{print "waves=" $1}'
+du -sh "${artifact_root}" "${PRIVATE_OUT}" "${HARNESS_ROOT}"/usable-emissions* \
+  "${DETACHED_ROOT:-${HARNESS_ROOT}/detached-runs}" 2>/dev/null || true
 df -h . || true
 
 printf '%s\n' '---- related processes ----'
