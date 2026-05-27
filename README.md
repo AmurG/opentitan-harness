@@ -128,6 +128,7 @@ Status and archive paths are printed in `detached-runs/latest/signal.log`:
 ```bash
 tail -n 100 detached-runs/latest/signal.log
 cat detached-runs/latest/archive_path
+cat detached-runs/latest/archive_bytes
 du -sh usable-emissions-signal-10h opentitan-usable-emissions-*.tar.gz
 ```
 

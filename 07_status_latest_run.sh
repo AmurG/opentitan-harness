@@ -50,7 +50,7 @@ done
 
 if [[ -n "${log_file}" ]]; then
   printf 'log=%s\n' "${log_file}"
-  for rc_file in run_rc collect_rc archive_rc archive_path; do
+  for rc_file in run_rc collect_rc archive_rc archive_path archive_bytes; do
     if [[ -f "${run}/${rc_file}" ]]; then
       printf '%s=%s\n' "${rc_file}" "$(cat "${run}/${rc_file}")"
     fi

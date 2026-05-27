@@ -48,11 +48,13 @@ export COLLECT_INCLUDE_PRIVATE_PATH_REGEX="${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:
 export VCD_SIGNATURE_MAX_BYTES="${VCD_SIGNATURE_MAX_BYTES:-100000000}"
 export SIGNAL_RUN_TIMEOUT="${SIGNAL_RUN_TIMEOUT:-10h}"
 export SIGNAL_RUN_KILL_AFTER="${SIGNAL_RUN_KILL_AFTER:-10m}"
+export MAX_SIGNAL_ARCHIVE_BYTES="${MAX_SIGNAL_ARCHIVE_BYTES:-1000000000}"
 
 printf '[detached-signal] started %s\n' "${RUN_STARTED_UTC}"
 printf '[detached-signal] host=%s cwd=%s\n' "$(hostname 2>/dev/null || printf unknown)" "$(pwd)"
-printf '[detached-signal] timeout=%s kill_after=%s usable_out=%s\n' \
-  "${SIGNAL_RUN_TIMEOUT}" "${SIGNAL_RUN_KILL_AFTER}" "${USABLE_OUT}"
+printf '[detached-signal] timeout=%s kill_after=%s usable_out=%s max_archive_bytes=%s\n' \
+  "${SIGNAL_RUN_TIMEOUT}" "${SIGNAL_RUN_KILL_AFTER}" "${USABLE_OUT}" \
+  "${MAX_SIGNAL_ARCHIVE_BYTES}"
 
 if [[ "${RUN_PREREQS:-1}" != "0" ]]; then
   ./00_check_prereqs.sh
@@ -90,8 +92,16 @@ if [[ "${collect_rc}" == "0" ]]; then
   set -e
   archive="$(ls -1t opentitan-usable-emissions-*.tar.gz 2>/dev/null | head -n 1 || true)"
   if [[ -n "${archive}" ]]; then
-    printf '%s\n' "$(pwd)/${archive}" > "__RUN_DIR__/archive_path"
-    printf '[detached-signal] archive=%s\n' "$(pwd)/${archive}"
+    archive_full="$(pwd)/${archive}"
+    printf '%s\n' "${archive_full}" > "__RUN_DIR__/archive_path"
+    printf '[detached-signal] archive=%s\n' "${archive_full}"
+    archive_bytes="$(wc -c < "${archive_full}" | tr -d ' ')"
+    printf '%s\n' "${archive_bytes}" > "__RUN_DIR__/archive_bytes"
+    printf '[detached-signal] archive_bytes=%s\n' "${archive_bytes}"
+    if [[ -n "${MAX_SIGNAL_ARCHIVE_BYTES}" ]] && \
+       (( archive_bytes > MAX_SIGNAL_ARCHIVE_BYTES )); then
+      printf '[detached-signal] warning=archive exceeds MAX_SIGNAL_ARCHIVE_BYTES\n'
+    fi
   fi
 fi
 printf '[detached-signal] archive_rc=%s\n' "${archive_rc}"
