@@ -113,6 +113,60 @@ For only the unresolved Arcilator frontier subset, run:
 ./03_pack_usable_emissions.sh
 ```
 
+Preferred no-wave semantic feedback run:
+
+```bash
+git pull
+./07_status_latest_run.sh
+STOP_CONFIRM=1 RUN_SETUP=0 ./11_replace_latest_with_semantic_10h.sh
+```
+
+This stops the latest detached process group, skips partial collection from the
+old huge run, and launches `run_detached_semantic_10h.sh`. It runs
+`targets/xrun-semantic-10h.tsv`, a 36-row breadth-first subset of exact
+dashboard test / iteration / seed / build-mode keys. The run intentionally sets
+`DVSIM_WAVES=off`, so `02_run_xrun_eval.sh` omits DVSim's `--waves` argument
+entirely. The point is to get OpenTitan's existing DVSim/UVM/checker/log
+feedback, not to produce another private tree dominated by raw VCD I/O.
+
+Bounded semantic defaults:
+
+```text
+outer timeout: 10h
+per DVSim group timeout: 18m, kill after 3m
+rows: 36 one-seed DVSim invocations, preserving target-file order
+waves: disabled; no --waves / --max-waves passed to DVSim
+export: raw waves disabled, private Xcelium output not exported
+usable output: usable-emissions-semantic-10h/
+archive: opentitan-usable-emissions-semantic-10h-<run-id>.tar.gz
+archive warning threshold: 1GB
+```
+
+Status/export after reconnect:
+
+```bash
+./07_status_latest_run.sh
+tail -n 120 detached-runs/latest/semantic.log
+cat detached-runs/latest/archive_path
+cat detached-runs/latest/archive_bytes
+du -sh usable-emissions-semantic-10h "$(cat detached-runs/latest/archive_path)"
+```
+
+The export contains license-free evidence only: target manifest, command/env
+files, bounded log excerpts, oversized-log tails, log counts, and
+`semantic_feedback` JSON buckets for DVSim result tables, UVM reports,
+assertions, scoreboards/mismatches, test status, and simulator errors. Use the
+older VCD signal run only when a specific mismatch needs waveform inspection.
+
+If the old full-dashboard private tree is no longer needed and disk cleanup is
+acceptable, the replacement helper can also remove it after stopping the latest
+run:
+
+```bash
+STOP_CONFIRM=1 PRUNE_ALL_DASHBOARD_PRIVATE=1 RUN_SETUP=0 \
+  ./11_replace_latest_with_semantic_10h.sh
+```
+
 For a bounded feedback run intended to finish in about ten hours and produce a
 small exportable bundle:
 

@@ -78,6 +78,14 @@ else
 fi
 
 if is_truthy "${COLLECT_AFTER_STOP:-0}"; then
+  if [[ -z "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" && -f "${run}/semantic.log" ]]; then
+    export COLLECT_INCLUDE_PRIVATE_PATH_REGEX="runs/semantic-10h/"
+    if [[ "${USABLE_OUT}" == "${HARNESS_ROOT}/usable-emissions" ]]; then
+      export USABLE_OUT="${HARNESS_ROOT}/usable-emissions-semantic-10h"
+    fi
+    export PARTIAL_TARGET_FILE="${PARTIAL_TARGET_FILE:-${HARNESS_ROOT}/targets/xrun-semantic-10h.tsv}"
+    export VCD_SIGNATURE_MAX_BYTES="${VCD_SIGNATURE_MAX_BYTES:-1}"
+  fi
   if [[ -z "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" && -f "${run}/signal.log" ]]; then
     export COLLECT_INCLUDE_PRIVATE_PATH_REGEX="runs/signal-10h/"
     if [[ "${USABLE_OUT}" == "${HARNESS_ROOT}/usable-emissions" ]]; then

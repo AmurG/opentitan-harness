@@ -54,7 +54,7 @@ fi
 
 printf '%s\n' '---- progress ----'
 log_file=""
-for candidate in "${run}/signal.log" "${run}/overnight.log"; do
+for candidate in "${run}/semantic.log" "${run}/signal.log" "${run}/overnight.log"; do
   if [[ -f "${candidate}" ]]; then
     log_file="${candidate}"
     break
@@ -110,6 +110,9 @@ fi
 
 printf '%s\n' '---- artifacts ----'
 artifact_root="${PRIVATE_OUT}/runs"
+if [[ -f "${run}/semantic.log" && -d "${PRIVATE_OUT}/runs/semantic-10h" ]]; then
+  artifact_root="${PRIVATE_OUT}/runs/semantic-10h"
+fi
 if [[ -f "${run}/signal.log" && -d "${PRIVATE_OUT}/runs/signal-10h" ]]; then
   artifact_root="${PRIVATE_OUT}/runs/signal-10h"
 fi
@@ -127,5 +130,5 @@ df -h . || true
 
 printf '%s\n' '---- related processes ----'
 ps -u "${USER}" -o pid,ppid,pgid,sid,etime,stat,cmd \
-  | grep -E 'screen|run_detached|overnight|signal|dvsim|xrun|xcelium|bazel|bazelisk' \
+  | grep -E 'screen|run_detached|overnight|semantic|signal|dvsim|xrun|xcelium|bazel|bazelisk' \
   | grep -v grep || true

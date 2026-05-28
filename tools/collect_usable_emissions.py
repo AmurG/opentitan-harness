@@ -14,9 +14,31 @@ from pathlib import Path
 
 IMPORTANT_LOG_RE = re.compile(
     r"(UVM_(?:ERROR|FATAL)|\*E,|\*F,|TEST (?:PASSED|FAILED)|"
-    r"PASSED|FAILED|Errors?:|Fatals?:|SVSEED|ntb_random_seed|waves?\.)",
+    r"PASSED|FAILED|Errors?:|Fatals?:|SVSEED|ntb_random_seed|waves?\.|"
+    r"scoreboard|mismatch|assert|test[_ -]?status|test_done)",
     re.IGNORECASE,
 )
+SEMANTIC_LOG_PATTERNS = {
+    "uvm_reports": re.compile(r"\bUVM_(?:INFO|WARNING|ERROR|FATAL)\b|UVM Report Summary"),
+    "assertions": re.compile(r"ASSERT(?:ION)?|assert failed|Assertion failed", re.IGNORECASE),
+    "scoreboards": re.compile(
+        r"scoreboard|mismatch|expected|actual|compare|prediction", re.IGNORECASE
+    ),
+    "test_status": re.compile(
+        r"test[_ -]?status|sw_test_status|test_done|TEST (?:PASSED|FAILED)|"
+        r"\b(?:PASS|PASSED|FAIL|FAILED|SUCCESS|DONE)\b",
+        re.IGNORECASE,
+    ),
+    "dvsim_results": re.compile(
+        r"^## |^### |^\|.*(?:Passing|Total|Pass Rate|Stage|Tests)|"
+        r"Failure Buckets|Job returned|FlowCfg|StatusPrinter"
+    ),
+    "sim_errors": re.compile(
+        r"\*E,|\*F,|ERROR:|FAILED:|Traceback|Exception|Killed|Timeout|"
+        r"test_done never asserted|non-zero exit",
+        re.IGNORECASE,
+    ),
+}
 TIME_RE = re.compile(r"^#([0-9]+)\s*$")
 VAR_RE = re.compile(r"^\$var\s+\S+\s+(\d+)\s+(\S+)\s+(.+?)\s+\$end\s*$")
 SCOPE_RE = re.compile(r"^\$scope\s+\S+\s+(.+?)\s+\$end\s*$")
@@ -123,10 +145,83 @@ def log_counts(paths: list[Path]) -> dict[str, int]:
     return counts
 
 
-def write_log_excerpt(paths: list[Path], out_path: Path, tail_lines: int) -> None:
+def display_path(path: Path, base: Path | None = None) -> str:
+    if base is not None:
+        try:
+            return str(path.relative_to(base))
+        except ValueError:
+            pass
+    return str(path)
+
+
+def extract_semantic_feedback(
+    paths: list[Path],
+    max_lines_per_category: int,
+    *,
+    relative_to: Path | None = None,
+) -> dict[str, object]:
+    categories: dict[str, list[dict[str, object]]] = {
+        key: [] for key in SEMANTIC_LOG_PATTERNS
+    }
+    files_scanned: list[dict[str, object]] = []
+    category_limit = max(40, max_lines_per_category)
+
+    def add(category: str, path: Path, line_no: int, line: str) -> None:
+        bucket = categories[category]
+        bucket.append(
+            {
+                "file": path.name,
+                "path": display_path(path, relative_to),
+                "line": line_no,
+                "text": line,
+            }
+        )
+        if len(bucket) > category_limit:
+            del bucket[0 : len(bucket) - category_limit]
+
+    for path in paths:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        files_scanned.append(
+            {
+                "name": path.name,
+                "path": display_path(path, relative_to),
+                "lines": len(lines),
+                "bytes": path.stat().st_size,
+            }
+        )
+        for line_no, line in enumerate(lines, start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            for category, pattern in SEMANTIC_LOG_PATTERNS.items():
+                if pattern.search(stripped):
+                    add(category, path, line_no, stripped)
+
+    return {
+        "files_scanned": files_scanned,
+        "max_lines_per_category": category_limit,
+        "categories": categories,
+        "note": (
+            "Derived from license-free DVSim/Xcelium textual logs. This is intended "
+            "for checker/status feedback when waves are disabled."
+        ),
+    }
+
+
+def write_log_excerpt(
+    paths: list[Path],
+    out_path: Path,
+    tail_lines: int,
+    *,
+    relative_to: Path | None = None,
+) -> None:
     selected: list[str] = []
     for path in paths:
-        selected.append(f"===== {path.name} important lines =====")
+        label = display_path(path, relative_to)
+        selected.append(f"===== {label} important lines =====")
         try:
             lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError as exc:
@@ -134,7 +229,7 @@ def write_log_excerpt(paths: list[Path], out_path: Path, tail_lines: int) -> Non
             continue
         important = [line for line in lines if IMPORTANT_LOG_RE.search(line)]
         selected.extend(important[-tail_lines:])
-        selected.append(f"===== {path.name} tail =====")
+        selected.append(f"===== {label} tail =====")
         selected.extend(lines[-tail_lines:])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(selected) + "\n", encoding="utf-8")
@@ -156,14 +251,19 @@ def tail_lines_bounded(path: Path, *, max_lines: int, max_bytes: int) -> list[st
     return lines[-max_lines:]
 
 
-def write_large_log_tails(paths: list[Path], out_path: Path, tail_lines: int) -> str | None:
+def write_large_log_tails(
+    paths: list[Path],
+    out_path: Path,
+    tail_lines: int,
+    *,
+    relative_to: Path | None = None,
+) -> str | None:
     if not paths:
         return None
     selected: list[str] = []
     for path in paths:
-        selected.append(
-            f"===== {path.name} tail, bounded to {LARGE_LOG_TAIL_BYTES} bytes ====="
-        )
+        label = display_path(path, relative_to)
+        selected.append(f"===== {label} tail, bounded to {LARGE_LOG_TAIL_BYTES} bytes =====")
         try:
             selected.extend(
                 tail_lines_bounded(
@@ -450,6 +550,9 @@ def main() -> int:
             ],
             "log_counts": log_counts(logs),
             "log_counts_scope": f"logs smaller than {MAX_LOG_READ_BYTES} bytes",
+            "semantic_feedback": extract_semantic_feedback(
+                logs, args.log_excerpt_lines, relative_to=args.private_root
+            ),
             "waves": [],
         }
         copied_command = copy_text_if_present(run_dir / "command.sh", out_dir / "command.sh")
@@ -463,9 +566,17 @@ def main() -> int:
             summary["run_env"] = str(Path(copied_env).relative_to(args.usable_out))
         if copied_targets:
             summary["selected_targets_tsv"] = str(Path(copied_targets).relative_to(args.usable_out))
-        write_log_excerpt(logs, out_dir / "log_excerpt.txt", args.log_excerpt_lines)
+        write_log_excerpt(
+            logs,
+            out_dir / "log_excerpt.txt",
+            args.log_excerpt_lines,
+            relative_to=args.private_root,
+        )
         large_log_tail = write_large_log_tails(
-            large_logs, out_dir / "large_log_tails.txt", args.log_excerpt_lines
+            large_logs,
+            out_dir / "large_log_tails.txt",
+            args.log_excerpt_lines,
+            relative_to=args.private_root,
         )
         if large_log_tail:
             summary["large_log_tails"] = str(Path(large_log_tail).relative_to(args.usable_out))

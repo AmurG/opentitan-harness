@@ -39,6 +39,11 @@ if [[ -z "${target_for_manifest}" && \
       -f "${HARNESS_ROOT}/targets/xrun-10h-signal.tsv" ]]; then
   target_for_manifest="${HARNESS_ROOT}/targets/xrun-10h-signal.tsv"
 fi
+if [[ -z "${target_for_manifest}" && \
+      "${COLLECT_INCLUDE_PRIVATE_PATH_REGEX:-}" == *semantic-10h* && \
+      -f "${HARNESS_ROOT}/targets/xrun-semantic-10h.tsv" ]]; then
+  target_for_manifest="${HARNESS_ROOT}/targets/xrun-semantic-10h.tsv"
+fi
 if [[ -z "${target_for_manifest}" && -f "${PRIVATE_OUT}/runs/all-dashboard/selected_targets.tsv" ]]; then
   target_for_manifest="${PRIVATE_OUT}/runs/all-dashboard/selected_targets.tsv"
 fi

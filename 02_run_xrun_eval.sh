@@ -40,6 +40,24 @@ printf '[info] targets=%s\n' "${TARGET_FILE}"
 printf '[info] raw-private-out=%s\n' "${PRIVATE_OUT}"
 printf '[info] usable-out=%s\n' "${USABLE_OUT}"
 
+dvsim_waves_enabled() {
+  case "${DVSIM_WAVES:-}" in
+    ""|0|false|FALSE|no|NO|none|NONE|off|OFF) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+append_wave_args() {
+  local -n cmd_ref="$1"
+  local max_waves="${2:-}"
+  if dvsim_waves_enabled; then
+    cmd_ref+=(--waves "${DVSIM_WAVES}")
+    if [[ -n "${max_waves}" ]]; then
+      cmd_ref+=(--max-waves "${max_waves}")
+    fi
+  fi
+}
+
 run_collector() {
   collector_args=(
     --private-root "${PRIVATE_OUT}"
@@ -101,6 +119,11 @@ if is_truthy "${BATCH_TARGETS:-0}"; then
     printf 'OPENTITAN_COMMIT=%s\n' "${opentitan_commit}"
     printf 'DVSIM_TOOL=%s\n' "${DVSIM_TOOL}"
     printf 'DVSIM_WAVES=%s\n' "${DVSIM_WAVES}"
+    if dvsim_waves_enabled; then
+      printf 'DVSIM_WAVES_ENABLED=1\n'
+    else
+      printf 'DVSIM_WAVES_ENABLED=0\n'
+    fi
     printf 'RUN_ROOT=%s\n' "${run_root}"
     printf 'TARGET_FILE=%s\n' "${TARGET_FILE}"
     printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
@@ -216,13 +239,12 @@ PY
       "${dvsim_cmd[@]}"
       "${OPENTITAN_ROOT}/${DVSIM_CFG}"
       --tool "${DVSIM_TOOL}"
-      --waves "${DVSIM_WAVES}"
-      --max-waves "${group_max_waves}"
       --reseed "${seed_count}"
       --seeds "${group_seeds[@]}"
       --scratch-root "${group_dir}/scratch"
       --max-parallel "${DVSIM_MAX_PARALLEL}"
     )
+    append_wave_args cmd "${group_max_waves}"
     if [[ -n "${DVSIM_EXTRA_ARGS:-}" ]]; then
       read -r -a extra_args <<< "${DVSIM_EXTRA_ARGS}"
       cmd+=("${extra_args[@]}")
@@ -235,13 +257,23 @@ PY
       printf 'TARGET_COUNT=%s\n' "${seed_count}"
       printf 'SEEDS=%s\n' "${seed_csv}"
       printf 'DVSIM_MAX_WAVES_EFFECTIVE=%s\n' "${group_max_waves}"
+      if dvsim_waves_enabled; then
+        printf 'DVSIM_WAVES_ENABLED=1\n'
+      else
+        printf 'DVSIM_WAVES_ENABLED=0\n'
+      fi
       printf 'GROUP_DIR=%s\n' "${group_dir}"
       printf 'BATCH_GROUP_MAX_SEEDS=%s\n' "${BATCH_GROUP_MAX_SEEDS:-}"
       printf 'DVSIM_GROUP_TIMEOUT=%s\n' "${DVSIM_GROUP_TIMEOUT:-}"
     } > "${group_dir}/group.env"
 
-    printf '[batch-group] %s/%s test=%s seeds=%s max_waves=%s\n' \
-      "$((group_idx + 1))" "${group_count}" "${test}" "${seed_count}" "${group_max_waves}"
+    if dvsim_waves_enabled; then
+      wave_status="${DVSIM_WAVES}:${group_max_waves}"
+    else
+      wave_status="disabled"
+    fi
+    printf '[batch-group] %s/%s test=%s seeds=%s waves=%s\n' \
+      "$((group_idx + 1))" "${group_count}" "${test}" "${seed_count}" "${wave_status}"
     {
       printf '# group %s/%s test=%s seeds=%s\n' \
         "$((group_idx + 1))" "${group_count}" "${test}" "${seed_count}"
@@ -300,6 +332,11 @@ while IFS=$'\t' read -r test iteration seed build_mode reason; do
     printf 'OPENTITAN_COMMIT=%s\n' "${opentitan_commit}"
     printf 'DVSIM_TOOL=%s\n' "${DVSIM_TOOL}"
     printf 'DVSIM_WAVES=%s\n' "${DVSIM_WAVES}"
+    if dvsim_waves_enabled; then
+      printf 'DVSIM_WAVES_ENABLED=1\n'
+    else
+      printf 'DVSIM_WAVES_ENABLED=0\n'
+    fi
     printf 'RUN_ROOT=%s\n' "${run_root}"
   } > "${run_root}/run.env"
 
@@ -307,14 +344,13 @@ while IFS=$'\t' read -r test iteration seed build_mode reason; do
     "${dvsim_cmd[@]}"
     "${OPENTITAN_ROOT}/${DVSIM_CFG}"
     --tool "${DVSIM_TOOL}"
-    --waves "${DVSIM_WAVES}"
-    --max-waves "${DVSIM_MAX_WAVES:-1}"
     --reseed 1
     --fixed-seed "${seed}"
     --scratch-root "${run_root}/scratch"
     --max-parallel "${DVSIM_MAX_PARALLEL}"
-    -i "${test}"
   )
+  append_wave_args cmd "${DVSIM_MAX_WAVES:-1}"
+  cmd+=(-i "${test}")
   if [[ -n "${DVSIM_EXTRA_ARGS:-}" ]]; then
     read -r -a extra_args <<< "${DVSIM_EXTRA_ARGS}"
     cmd+=("${extra_args[@]}")
